@@ -1,4 +1,5 @@
 import Fastify from 'fastify'
+import cors from '@fastify/cors'
 import type { FastifyReply, FastifyServerOptions, RouteHandlerMethod } from 'fastify'
 import { loadDealsWithSummary } from './deals/loadDeals.js'
 import type { LoadDealsOptions } from './deals/loadDeals.js'
@@ -17,8 +18,13 @@ declare module 'fastify' {
   }
 }
 
-export function buildApp(options: FastifyServerOptions = {}, data: LoadDealsOptions & CacheOptions & { csvPath?: string | URL } = {}) {
+export function buildApp(options: FastifyServerOptions = {}, data: LoadDealsOptions & CacheOptions & { csvPath?: string | URL; corsOrigins?: string[] } = {}) {
   const app = Fastify(options)
+  app.register(cors, {
+    origin: data.corsOrigins ?? [],
+    methods: ['GET', 'HEAD'],
+    exposedHeaders: ['Retry-After'],
+  })
   const ttlSeconds = validateCacheTtlSeconds(data.redisCacheTtlSeconds ?? defaultCacheTtlSeconds)
   const cache = data.cache ?? (data.redisUrl ? createRedisCache(data.redisUrl, app.log) : undefined)
   let getDeals: ReturnType<typeof createCachedDealsQuery>

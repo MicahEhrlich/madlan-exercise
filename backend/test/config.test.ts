@@ -17,7 +17,7 @@ it('uses existing defaults when settings or the env file are missing', async () 
   const { path } = await envFile('')
   for (const envPath of [path, path + '.missing']) {
     expect(loadBackendConfig({}, envPath)).toEqual({
-      redisUrl: undefined, redisCacheTtlSeconds: 300,
+      corsOrigins: [], redisUrl: undefined, redisCacheTtlSeconds: 300,
       anthropicApiKey: undefined, llmBatchSize: 5, anthropicModel: 'claude-haiku-4-5-20251001', batchSize: 1000, csvPath: defaultCsvPath,
     })
   }
@@ -25,13 +25,13 @@ it('uses existing defaults when settings or the env file are missing', async () 
 
 it('treats blank and whitespace values as missing', async () => {
   const { path } = await envFile('ANTHROPIC_API_KEY=\nBATCH_SIZE="  "\nCSV_FILE_PATH="  "')
-  expect(loadBackendConfig({}, path)).toEqual({ redisUrl: undefined, redisCacheTtlSeconds: 300, anthropicApiKey: undefined, llmBatchSize: 5, anthropicModel: 'claude-haiku-4-5-20251001', batchSize: 1000, csvPath: defaultCsvPath })
+  expect(loadBackendConfig({}, path)).toEqual({ corsOrigins: [], redisUrl: undefined, redisCacheTtlSeconds: 300, anthropicApiKey: undefined, llmBatchSize: 5, anthropicModel: 'claude-haiku-4-5-20251001', batchSize: 1000, csvPath: defaultCsvPath })
 })
 
 it('loads the three settings and resolves quoted paths relative to the backend', async () => {
   const { path } = await envFile('ANTHROPIC_API_KEY=test-key\nBATCH_SIZE=25\nCSV_FILE_PATH="../example data.csv"')
   expect(loadBackendConfig({}, path)).toEqual({
-    redisUrl: undefined, redisCacheTtlSeconds: 300,
+    corsOrigins: [], redisUrl: undefined, redisCacheTtlSeconds: 300,
     anthropicApiKey: 'test-key', batchSize: 25, llmBatchSize: 5, anthropicModel: 'claude-haiku-4-5-20251001',
     csvPath: fileURLToPath(new URL('../../example data.csv', import.meta.url)),
   })
@@ -40,7 +40,7 @@ it('loads the three settings and resolves quoted paths relative to the backend',
 it('allows shell settings to override file settings and accepts absolute paths', async () => {
   const { path } = await envFile('ANTHROPIC_API_KEY=file-key\nBATCH_SIZE=25\nCSV_FILE_PATH=file.csv')
   expect(loadBackendConfig({ ANTHROPIC_API_KEY: 'shell-key', BATCH_SIZE: '50', CSV_FILE_PATH: path }, path)).toEqual({
-    redisUrl: undefined, redisCacheTtlSeconds: 300,
+    corsOrigins: [], redisUrl: undefined, redisCacheTtlSeconds: 300,
     anthropicApiKey: 'shell-key', batchSize: 50, llmBatchSize: 5, anthropicModel: 'claude-haiku-4-5-20251001', csvPath: path,
   })
 })
@@ -48,6 +48,19 @@ it('allows shell settings to override file settings and accepts absolute paths',
 it.each(['0', '-1', '1.5', 'invalid', 'Infinity', '9007199254740992'])('rejects invalid BATCH_SIZE %s', async (value) => {
   const { path } = await envFile('')
   expect(() => loadBackendConfig({ BATCH_SIZE: value }, path)).toThrow('BATCH_SIZE must be a positive safe integer')
+})
+
+it('loads exact CORS origins, normalizes trailing slashes, and respects environment overrides', async () => {
+  const { path } = await envFile('CORS_ORIGINS=https://frontend-rust-pi-90.vercel.app')
+  expect(loadBackendConfig({}, path).corsOrigins).toEqual(['https://frontend-rust-pi-90.vercel.app'])
+  expect(loadBackendConfig({ CORS_ORIGINS: ' https://other.example/, , http://localhost:5173 ' }, path).corsOrigins)
+    .toEqual(['https://other.example', 'http://localhost:5173'])
+  expect(loadBackendConfig({ CORS_ORIGINS: ' ' }, path).corsOrigins).toEqual([])
+})
+
+it.each(['*', 'null', 'invalid', 'ftp://example.com', 'https://example.com/path', 'https://user:secret@example.com', 'https://example.com?q=1', 'https://example.com#fragment'])('rejects invalid CORS origin %s', async (value) => {
+  const { path } = await envFile('')
+  expect(() => loadBackendConfig({ CORS_ORIGINS: value }, path)).toThrow(/^CORS_ORIGINS must contain/)
 })
 
 it('does not suppress env file errors other than a missing file', async () => {

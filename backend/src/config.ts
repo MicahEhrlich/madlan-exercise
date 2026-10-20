@@ -19,6 +19,13 @@ export function loadBackendConfig(environment: NodeJS.ProcessEnv = process.env, 
   }
   // Deployment/shell variables take precedence over the local env file.
   const values = { ...fileValues, ...environment }
+  const corsOrigins = (values.CORS_ORIGINS?.trim() || '').split(',').map((origin) => origin.trim()).filter(Boolean).map((origin) => {
+    try {
+      const url = new URL(origin)
+      if (['http:', 'https:'].includes(url.protocol) && url.origin === origin.replace(/\/+$/, '')) return url.origin
+    } catch { /* Report invalid configuration consistently. */ }
+    throw new Error('CORS_ORIGINS must contain comma-separated HTTP(S) origins without paths, credentials, queries, or fragments')
+  })
   const batchSize = Number(values.BATCH_SIZE?.trim() || defaultBatchSize)
   if (!Number.isSafeInteger(batchSize) || batchSize <= 0) {
     throw new Error('BATCH_SIZE must be a positive safe integer')
@@ -37,6 +44,7 @@ export function loadBackendConfig(environment: NodeJS.ProcessEnv = process.env, 
   }
   const redisCacheTtlSeconds = validateCacheTtlSeconds(Number(values.REDIS_CACHE_TTL_SECONDS?.trim() || defaultCacheTtlSeconds))
   return {
+    corsOrigins,
     redisUrl,
     redisCacheTtlSeconds,
     anthropicApiKey: values.ANTHROPIC_API_KEY?.trim() || undefined,

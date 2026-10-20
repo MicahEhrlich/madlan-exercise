@@ -41,10 +41,17 @@ LLM_BATCH_SIZE=
 ANTHROPIC_MODEL=
 REDIS_URL=
 REDIS_CACHE_TTL_SECONDS=
+CORS_ORIGINS=
 ```
 
 - `ANTHROPIC_API_KEY`: enables Anthropic repair during import. When missing or blank,
   LLM repair is skipped; code corrections still run. Credentials are never logged.
+- `CORS_ORIGINS`: comma-separated frontend HTTP(S) origins allowed to read the API
+  from a browser. Missing or blank disables cross-origin access. Paths, wildcards,
+  credentials, queries, and fragments are rejected; trailing slashes are normalized.
+  Same-origin requests and server clients continue to work. CORS covers preflight,
+  loading, and error responses, and exposes `Retry-After` for startup polling.
+
 - `BATCH_SIZE`: defaults to 1,000 when missing or blank. A supplied value must be
   a positive safe integer or startup fails.
 - `CSV_FILE_PATH`: defaults to the existing root CSV when missing or blank.
@@ -58,6 +65,22 @@ REDIS_CACHE_TTL_SECONDS=
   configuration validation without exposing credentials.
 - `REDIS_CACHE_TTL_SECONDS`: expiration in seconds, default **300** (five minutes).
   Must be a positive safe integer, even when caching is disabled.
+
+For the Render API and Vercel frontend, set this environment variable on **Render**
+and redeploy the backend with the CORS changes:
+
+```dotenv
+CORS_ORIGINS=https://frontend-rust-pi-90.vercel.app
+```
+
+On **Vercel**, set `VITE_API_BASE_URL=https://madlan-exercise.onrender.com` and
+rebuild the frontend if that value changes. For direct local API access, add
+`http://localhost:5173` to `CORS_ORIGINS`, separated by a comma. The Vite development
+proxy does not require CORS.
+
+`strict-origin-when-cross-origin` is the browser's referrer policy; it does not
+grant CORS access. A successful cross-origin response must include
+`Access-Control-Allow-Origin: https://frontend-rust-pi-90.vercel.app`.
 
 ## Redis response cache
 
