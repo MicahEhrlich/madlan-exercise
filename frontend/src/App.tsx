@@ -10,7 +10,7 @@ function App() {
           <p className="mb-2 text-sm font-medium text-teal-700 dark:text-teal-400">סקירת עסקאות נדל״ן</p>
           <h1 className="text-3xl font-bold tracking-tight">טבלת עסקאות</h1>
           <p id="data-notice" className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-            העסקאות נטענות מהשרת. החיפוש והמסננים חלים על כל העמודים.
+            העסקאות נטענות מהשרת. החיפוש והמסננים חלים על כל העמודים. חלק מהשדות עשויים להיות ריקים, והמידע אינו מהווה ייעוץ או חוות דעת מקצועית.
           </p>
         </header>
 

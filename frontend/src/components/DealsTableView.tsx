@@ -1,9 +1,10 @@
 import { columns } from '../data/dealColumns'
-import type { PropertyDeal } from '../types/propertyDeal'
+import type { PropertyDeal, PropertyDealValues } from '../types/propertyDeal'
 import type { DealFilters } from '../utils/filterDeals'
 import { formatValue } from '../utils/formatValue'
 import ColumnFilter from './ColumnFilter'
 import SearchBar from './SearchBar'
+import DealCell from './DealCell'
 
 interface DealsTableViewProps {
   deals: PropertyDeal[]
@@ -11,7 +12,7 @@ interface DealsTableViewProps {
   query: string
   filters: DealFilters
   onQueryChange: (value: string) => void
-  onFilterChange: (key: keyof PropertyDeal, value: string) => void
+  onFilterChange: (key: keyof PropertyDealValues, value: string) => void
   onReset: () => void
 }
 
@@ -46,10 +47,9 @@ export default function DealsTableView({ deals, total, query, filters, onQueryCh
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {deals.map((deal) => (
               <tr key={`${deal.city}-${deal.street}-${deal.deal_date}`} className="transition-colors hover:bg-teal-50/50 dark:hover:bg-teal-950/50">
-                {columns.map(([key]) => (
-                  <td key={key} className={`px-5 py-5 tabular-nums ${key === 'price_nis' ? 'font-semibold text-teal-800 dark:text-teal-300' : 'text-slate-700 dark:text-slate-200'}`}>
-                    <bdi>{formatValue(deal[key], key)}</bdi>
-                  </td>
+                {columns.map(([key, label]) => (
+                  <DealCell key={key} field={key} label={label} value={deal[key]}
+                    repaired={key !== 'row_status' && deal.fixed_fields.includes(key)} />
                 ))}
               </tr>
             ))}

@@ -26,9 +26,14 @@ describe('CSV loader', () => {
     const path = await file(content)
     const deals = await loadDeals(logger(), path, { batchSize: 1 })
     expect(deals.map((deal) => deal.row_status)).toEqual(['original', 'fixed', 'original', 'fixed', 'fixed'])
+    expect(deals.map((deal) => deal.fixed_fields)).toEqual([
+      [], ['price_per_sqm'], [], ['floor', 'condition', 'has_parking'], ['deal_date'],
+    ])
     expect(await readFile(path, 'utf8')).toBe(content)
     expect(dealHeaders).not.toContain('row_status')
+    expect(dealHeaders).not.toContain('fixed_fields')
     expect(deals.every(Object.isFrozen)).toBe(true)
+    expect(deals.every((deal) => Object.isFrozen(deal.fixed_fields))).toBe(true)
   })
 
   it.each([undefined, 'test'])('loads MMM YYYY dates without a model request (API key: %s)', async (anthropicApiKey) => {
@@ -196,6 +201,7 @@ it('retains reused IDs at different cities or streets without changing row data 
   ])
   expect(repairTransport).not.toHaveBeenCalled()
   expect(deals.map((deal) => deal.row_status)).toEqual(['original', 'original', 'original', 'original'])
+  expect(deals.map((deal) => deal.fixed_fields)).toEqual([[], [], [], []])
   expect(log.info).toHaveBeenCalledWith({ originalAccepted: 2, codeCorrected: 2, llmCorrected: 0 }, 'Deals CSV correction summary')
   expect(log.info).toHaveBeenCalledWith({ total: 5, accepted: 4, rejected: 1 }, 'Deals CSV load complete')
   expect(log.info.mock.calls.filter((call) => call[1] === 'CSV ID collision retained by code')).toHaveLength(2)

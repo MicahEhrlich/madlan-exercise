@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useDeals } from '../hooks/useDeals'
 import DealsTableView from './DealsTableView'
 import type { DealFilters } from '../utils/filterDeals'
-import type { PropertyDeal } from '../types/propertyDeal'
+import type { PropertyDealValues } from '../types/propertyDeal'
 
 export default function DealsTable() {
   const [page, setPage] = useState(1)
@@ -19,7 +19,7 @@ export default function DealsTable() {
     return () => clearTimeout(timeout)
   }, [query, appliedQuery])
   const { data, loading, error, retry } = useDeals(page, count, filters, appliedQuery)
-  const changeFilter = (key: keyof PropertyDeal, value: string) => {
+  const changeFilter = (key: keyof PropertyDealValues, value: string) => {
     setFilters((current) => ({ ...current, [key]: value }))
     setPage(1)
   }

@@ -24,6 +24,19 @@ function displayedRows() {
 }
 
 describe('table search and filters', () => {
+  it('highlights exactly the fields listed in each row and gives them Hebrew descriptions', () => {
+    render(<DealsTable deals={mockDeals} />)
+    const repairedRow = displayedRows()[2]!
+    const cells = within(repairedRow).getAllByRole('cell')
+    const highlighted = cells.filter((cell) => cell.classList.contains('bg-sky-100'))
+    expect(highlighted).toHaveLength(2)
+    expect(highlighted[0]!.textContent).toContain('טרומפלדור 18')
+    expect(within(highlighted[0]!).getByRole('tooltip').textContent).toBe('רחוב הושלם על ידי המערכת')
+    expect(within(highlighted[1]!).getByRole('tooltip').textContent).toBe('מחיר למ״ר הושלם על ידי המערכת')
+    expect(within(displayedRows()[0]!).queryByRole('tooltip')).toBeNull()
+    expect(within(repairedRow).getByText('הושלמו על ידי המערכת').closest('td')!.classList.contains('bg-sky-100')).toBe(false)
+  })
+
   it('searches across columns and trims whitespace', () => {
     render(<DealsTable deals={mockDeals} />)
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: '  ביאליק  ' } })

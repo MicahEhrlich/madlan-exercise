@@ -31,6 +31,7 @@ export type RawDeal = Record<keyof Deal, string>
 /** Import metadata is separate from source CSV fields and model repair payloads. */
 export interface SavedDeal extends Deal {
   row_status: 'original' | 'fixed'
+  fixed_fields: readonly (keyof Deal)[]
 }
 
 export type DealCollection = readonly Readonly<SavedDeal>[]

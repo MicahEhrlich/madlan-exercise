@@ -1,8 +1,8 @@
 import { columns } from '../data/dealColumns'
-import type { PropertyDeal } from '../types/propertyDeal'
+import type { PropertyDeal, PropertyDealValues } from '../types/propertyDeal'
 import { formatValue } from './formatValue'
 
-export type DealFilters = Partial<Record<keyof PropertyDeal, string>>
+export type DealFilters = Partial<Record<keyof PropertyDealValues, string>>
 
 export function filterDeals(deals: PropertyDeal[], query: string, filters: DealFilters): PropertyDeal[] {
   const search = query.trim().toLocaleLowerCase('he-IL')

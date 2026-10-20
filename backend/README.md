@@ -92,7 +92,11 @@ produce `total: 0`, `total_pages: 0`, and `rows: []`. A page beyond the last pag
 returns an empty `rows` array while retaining the matching totals. URL-encode
 Hebrew text when constructing requests, for example with `URLSearchParams`.
 
-Every saved row includes `row_status: 'original' | 'fixed'`. Code corrections
+Every saved row includes `row_status: 'original' | 'fixed'` and `fixed_fields`,
+an array of repaired column names, for example `["floor", "price_per_sqm"]`.
+`GET /deals` returns this metadata on each row, including filtered/paginated results.
+Original rows have `fixed_fields: []`; `row_status` is derived from whether this
+array is empty. The array is frozen along with the saved row. Code corrections
 (including derived values and missing-value defaults), verified model repairs,
 and safe lookup fallbacks are `fixed`. Ordinary parsing, whitespace trimming,
 boolean normalization, and retaining a reused ID without changing data remain

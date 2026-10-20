@@ -14,6 +14,12 @@ export function isDealsPage(value: unknown): value is DealsPage {
   return page.rows.every((row: unknown) => {
     if (!row || typeof row !== 'object') return false
     const deal = row as Record<string, unknown>
+    const allowedFields = ['deal_id', ...columns.filter(([key]) => key !== 'row_status').map(([key]) => key)]
+    if (!Array.isArray(deal.fixed_fields) || !deal.fixed_fields.every((field: unknown) =>
+      typeof field === 'string' && allowedFields.includes(field),
+    )) return false
+    if (new Set(deal.fixed_fields).size !== deal.fixed_fields.length ||
+      (deal.row_status === 'fixed') !== (deal.fixed_fields.length > 0)) return false
     return columns.every(([key]) => {
       const field = deal[key]
       if (key === 'row_status') return field === 'original' || field === 'fixed'

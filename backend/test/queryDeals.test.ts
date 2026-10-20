@@ -68,6 +68,8 @@ describe('GET /deals', () => {
     expect(response.statusCode).toBe(200)
     expect(response.json()).toEqual({ page: 1, count: 20, total: 5, total_pages: 1, rows: server.deals })
     expect(response.json().rows[2].row_status).toBe('fixed')
+    expect(response.json().rows[0].fixed_fields).toEqual([])
+    expect(response.json().rows[2].fixed_fields).toEqual(['price_per_sqm'])
   })
 
   it('uses stable import order for nonoverlapping pages and the partial final page', async () => {
@@ -87,7 +89,7 @@ describe('GET /deals', () => {
   })
 
   it('accepts every specified filter together with typed exact matching', async () => {
-    const { deal_id: _id, row_status: _status, ...filters } = server.deals[0]!
+    const { deal_id: _id, row_status: _status, fixed_fields: _fixedFields, ...filters } = server.deals[0]!
     const query = Object.fromEntries(Object.entries(filters).map(([key, value]) => [key, String(value)]))
     expect((await get(query)).json().rows).toEqual([server.deals[0]])
     // Independently exercise each filter rather than letting another field mask it.

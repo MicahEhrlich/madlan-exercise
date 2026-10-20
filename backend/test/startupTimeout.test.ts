@@ -13,7 +13,7 @@ it('waits beyond Fastify’s old 10-second timeout and only publishes deals afte
   let signalStarted!: () => void
   const started = new Promise<void>((resolve) => { signalStarted = resolve })
   const finished = new Promise<void>((resolve) => { finishImport = resolve })
-  const deals = Object.freeze([Object.freeze(inspectDeal(validRow).deal)])
+  const deals = Object.freeze([Object.freeze({ ...inspectDeal(validRow).deal, row_status: 'original' as const, fixed_fields: Object.freeze([]) })])
   vi.mocked(loadDeals).mockImplementation(async () => {
     signalStarted()
     await finished

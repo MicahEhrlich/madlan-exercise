@@ -8,6 +8,12 @@ Free-text search is sent as `q` and applies to all matching rows before paginati
 Search waits for a 500 ms typing pause before requesting results and returning to
 page 1. The input updates immediately; clearing all filters cancels pending search.
 Page totals reflect both search and column filters.
+The API's `fixed_fields` list marks repaired known values with a light blue
+background and repaired unknown values with amber, with variants for both themes.
+Hovering or focusing a repaired value shows its Hebrew
+column name followed by `הושלם על ידי המערכת` for known values. Unknown values
+instead show the column name followed by `לא ידוע`, without claiming completion.
+Original cells have no repair mark.
 The interface labels this scope explicitly. Rows come from the
 API; mock deals are used only in tests.
 

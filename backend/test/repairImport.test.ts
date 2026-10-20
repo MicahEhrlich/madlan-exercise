@@ -29,13 +29,33 @@ it.each(['disabled', 'failed', 'invalid', 'unsupported', 'unknown'] as const)('r
     }))))
   })
   const log = logger()
-  const deals = await loadDeals(log, await file(csv([{ year_built: '', neighborhood: '' }])), {
+  const deals = await loadDeals(log, await file(csv([{ year_built: '', neighborhood: '', floor: '', price_per_sqm: '' }])), {
     anthropicApiKey: mode === 'disabled' ? undefined : 'test', repairTransport: transport,
   })
   expect(deals).toHaveLength(1)
   expect(deals[0]).toMatchObject({ row_status: 'fixed', year_built: 'unknown', neighborhood: 'unknown', city: 'חיפה', has_parking: false })
+  expect(deals[0]!.fixed_fields).toEqual(['neighborhood', 'floor', 'year_built', 'price_per_sqm'])
   expect(transport).toHaveBeenCalledTimes(mode === 'disabled' ? 0 : 1)
   expect(log.info).toHaveBeenCalledWith({ total: 1, accepted: 1, rejected: 0 }, 'Deals CSV load complete')
+})
+
+it('combines code and verified LLM field repairs without marking unchanged values', async () => {
+  const transport = vi.fn(async ({ candidates }: RepairRequest) => response(report(candidates.map((row) => proposed(row, {
+    has_parking: false, deal_date: '2025-08-01',
+  })))))
+  const path = await file(csv([{ has_parking: 'אין', floor: '', price_per_sqm: '', deal_date: '2025-08' }]))
+  const app = buildApp({}, { csvPath: path, anthropicApiKey: 'test', repairTransport: transport })
+  try {
+    const result = await app.inject('/deals?row_status=fixed&count=1')
+    expect(result.statusCode).toBe(200)
+    const row = result.json().rows[0]
+    expect(row).toMatchObject({ row_status: 'fixed', floor: 'unknown', has_parking: false, price_per_sqm: 20000, deal_date: '2025-08-01' })
+    expect(row.fixed_fields).toEqual(['floor', 'has_parking', 'deal_date', 'price_per_sqm'])
+    expect(app.deals[0]!.fixed_fields).toEqual(row.fixed_fields)
+    expect(Object.isFrozen(app.deals[0]!.fixed_fields)).toBe(true)
+    expect(transport).toHaveBeenCalledTimes(1)
+    expect(Object.keys(transport.mock.calls[0]![0].candidates[0]!.original)).toHaveLength(19)
+  } finally { await app.close() }
 })
 
 it('does not call the model for code-repaired prices or valid data', async () => {
@@ -64,6 +84,7 @@ it('accumulates repair rows across parsing batches, flushes at EOF, and preserve
   expect(transport.mock.calls.map(([request]) => request.candidates.map((row) => row.original.deal_id))).toEqual([['D1', 'D3'], ['D6']])
   expect(deals.map((row) => row.deal_id)).toEqual(['D1', 'D2', 'D3', 'D4', 'D5', 'D6'])
   expect(deals.map((row) => row.row_status)).toEqual(['fixed', 'original', 'fixed', 'original', 'fixed', 'fixed'])
+  expect(deals.map((row) => row.fixed_fields)).toEqual([['has_parking'], [], ['has_parking'], [], ['price_per_sqm'], ['has_parking']])
   expect(Object.isFrozen(deals)).toBe(true)
   expect(deals.every(Object.isFrozen)).toBe(true)
   expect(log.info).toHaveBeenCalledWith({ originalAccepted: 2, codeCorrected: 1, llmCorrected: 3 }, 'Deals CSV correction summary')
@@ -226,6 +247,7 @@ it('attempts eligible fact lookups with full context, retains unknown years, and
   expect(deals.map((row) => row.deal_id)).toEqual(['D1', 'unknown-year', 'neighborhood'])
   expect(deals[1]!.year_built).toBe('unknown')
   expect(deals.map((row) => row.row_status)).toEqual(['original', 'fixed', 'fixed'])
+  expect(deals.map((row) => row.fixed_fields)).toEqual([[], ['year_built'], ['neighborhood']])
   expect(log.info).toHaveBeenCalledWith({ total: 4, accepted: 3, rejected: 1 }, 'Deals CSV load complete')
   expect(log.info).toHaveBeenCalledWith(expect.objectContaining({ lookupSources: [expect.objectContaining({ field: 'neighborhood', url: 'https://city.example/streets' })] }), 'CSV repair batch complete')
 })
