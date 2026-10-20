@@ -168,6 +168,29 @@ starting the Redis client, without waiting for model requests to complete.
 
 ### Querying deals
 
+Responses also include `location_options` with `cities`, `neighborhoods`, `streets`,
+and `scope: { city, neighborhood }` (null means no selected parent). `selected_city`
+provides the canonical selected city, or null. Cities come
+from the full accepted dataset. Neighborhood choices use only the selected city;
+street choices use only the selected city and neighborhood. Each list ignores its
+own selected value, search, presets, other filters, and pagination. With no parent
+selected, the corresponding list spans all accepted rows. Names are deduplicated
+and sorted with Hebrew collation; explicit `unknown` values remain filterable.
+Options remain available even when the table has no matching rows. This metadata
+uses the existing `/deals` and `/deal` requests, without additional endpoints or
+model calls. Cached responses validate the metadata and its requested parent scope;
+the `deals:v4` namespace bypasses older entries without canonical city options.
+
+City identity normalizes whitespace, directional formatting marks, and dash/quote
+typography. Explicit aliases in `cityName.ts` group Tel Aviv forms (`ת"א`,
+`תל אביב`, `תל אביב יפו`), Beer Sheva (`ב"ש`, `באר-שבע`), and Modiin forms.
+Hyphenated city words such as `בית-שמש` normalize to spaces. The canonical city
+option matches all corresponding raw city spellings. Location catalogs, city
+filters, summaries, neighborhood benchmarks, and analysis comparisons use this
+same identity; original saved fields and source CSV files remain unchanged.
+There is no fuzzy matching, and distinct names such as `מודיעין עילית` are retained.
+Analysis cache policy version 2 prevents reuse of pre-normalization assessments.
+
 Every `/deals` and `/deal` response includes `filtered_summary` alongside the
 existing pagination fields:
 
@@ -195,7 +218,7 @@ implied by this descriptive counter.
 Multiple-city results have `city_comparison: null`. Empty results have both
 summary fields null. Pagination, including an empty page beyond the last page,
 does not change the summary. Search, presets, ranges, and all other filters do.
-The response remains cached as a unit with its summary; cache keys use `deals:v2`
+The response remains cached as a unit with its summary; cache keys use `deals:v4`
 so older entries without summaries are bypassed. Cache validation checks summary
 shape, finite positive means, percentage consistency, and result-count consistency.
 The global import summary endpoint is unchanged. No extra LLM calls are made.

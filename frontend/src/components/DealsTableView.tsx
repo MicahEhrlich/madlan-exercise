@@ -13,6 +13,8 @@ import PresetFilterChips from './PresetFilterChips'
 import type { InvestmentPresetId } from '../data/investmentPresets'
 import FilteredResultsSummary from './FilteredResultsSummary'
 import type { FilteredSummary } from '../types/filteredSummary'
+import type { LocationOptions } from '../types/locationOptions'
+import { locationFilterOptions } from '../utils/locationFilterOptions'
 
 interface DealsTableViewProps {
   deals: PropertyDeal[]
@@ -27,13 +29,15 @@ interface DealsTableViewProps {
   viewKey?: string
   summary?: FilteredSummary
   summaryLoading?: boolean
+  locationOptions?: LocationOptions
 }
 
-export default function DealsTableView({ deals, total, query, filters, onQueryChange, onFilterChange, onRangeApply, onReset, onPresetToggle, viewKey, summary, summaryLoading = false }: DealsTableViewProps) {
+export default function DealsTableView({ deals, total, query, filters, onQueryChange, onFilterChange, onRangeApply, onReset, onPresetToggle, viewKey, summary, summaryLoading = false, locationOptions }: DealsTableViewProps) {
   const [rangeDrafts, setRangeDrafts] = useState<DealFilters>({})
   const [openRange, setOpenRange] = useState<RangeField | null>(null)
   const selectedRanges = { ...filters, ...rangeDrafts }
   const { expandedRowId, toggle, close } = useExpandedDeal(JSON.stringify([viewKey ?? query, filters]))
+  const locations = locationFilterOptions(deals, filters, locationOptions)
 
   return (
     <section aria-labelledby="table-title" className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
@@ -64,8 +68,12 @@ export default function DealsTableView({ deals, total, query, filters, onQueryCh
                   ) : <ColumnFilter
                     type={key === 'deal_date' ? 'date' : numericFilterColumns.has(key) ? 'number' : 'select'}
                     label={label}
-                    value={filters[key] ?? ''}
-                    options={[...new Set([...deals.map((deal) => String(deal[key])), ...(filters[key] ? [filters[key]] : [])])]}
+                    value={key === 'city' ? locations.city.value : filters[key] ?? ''}
+                    options={key === 'city' || key === 'neighborhood' || key === 'street' ? locations[key].options
+                      : [...new Set([...deals.map((deal) => String(deal[key])), ...(filters[key] ? [filters[key]] : [])])]}
+                    disabled={(key === 'city' || key === 'neighborhood' || key === 'street') && locations[key].disabled}
+                    emptyOptionLabel={(key === 'neighborhood' || key === 'street') && locations[key].disabled
+                      ? filters.city ? 'טוען אפשרויות…' : 'יש לבחור עיר תחילה' : 'הכול'}
                     formatOption={(value) => formatValue(deals.find((deal) => String(deal[key]) === value)?.[key] ?? value, key)}
                     onChange={(value) => onFilterChange(key, value)}
                   />}

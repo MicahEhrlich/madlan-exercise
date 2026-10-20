@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { DealCollection } from './types.js'
+import { cityName } from './cityName.js'
 
 export const filteredSummarySchema = z.strictObject({
   average_price_per_sqm: z.number().finite().positive().nullable(),
@@ -27,9 +28,9 @@ function meanPrice(rows: DealCollection): number {
 export function filteredSummary(matches: DealCollection, allDeals: DealCollection): FilteredSummary {
   if (!matches.length) return { average_price_per_sqm: null, city_comparison: null }
   const average = meanPrice(matches)
-  const city = matches[0]!.city
-  if (matches.some((row) => row.city !== city)) return { average_price_per_sqm: average, city_comparison: null }
-  const baseline = meanPrice(allDeals.filter((row) => row.city === city))
+  const city = cityName(matches[0]!.city)
+  if (matches.some((row) => cityName(row.city) !== city)) return { average_price_per_sqm: average, city_comparison: null }
+  const baseline = meanPrice(allDeals.filter((row) => cityName(row.city) === city))
   return { average_price_per_sqm: average, city_comparison: {
     city, average_price_per_sqm: baseline, difference_pct: priceDifferencePct(average, baseline),
   } }

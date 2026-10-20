@@ -90,7 +90,8 @@ describe('GET /deals', () => {
     const response = await get()
     expect(response.statusCode).toBe(200)
     expect(response.json()).toEqual({ page: 1, count: 20, total: 5, total_pages: 1, rows: server.deals,
-      filtered_summary: { average_price_per_sqm: 20000, city_comparison: null } })
+      filtered_summary: { average_price_per_sqm: 20000, city_comparison: null },
+      location_options: { scope: { city: null, neighborhood: null }, selected_city: null, cities: ['חיפה', 'תל אביב-יפו'], neighborhoods: ['הדר'], streets: ['הרצל'] } })
     expect(response.json().rows[2].row_status).toBe('fixed')
     expect(response.json().rows[0].fixed_fields).toEqual([])
     expect(response.json().rows[2].fixed_fields).toEqual(['price_per_sqm'])
@@ -109,6 +110,7 @@ describe('GET /deals', () => {
     expect((await get({ city: ' חיפה ', rooms: '4', count: '1', page: '2' })).json()).toEqual({
       page: 2, count: 1, total: 2, total_pages: 2, rows: [server.deals[3]],
       filtered_summary: { average_price_per_sqm: 20000, city_comparison: { city: 'חיפה', average_price_per_sqm: 20000, difference_pct: 0 } },
+      location_options: { scope: { city: 'חיפה', neighborhood: null }, selected_city: 'חיפה', cities: ['חיפה', 'תל אביב-יפו'], neighborhoods: ['הדר'], streets: ['הרצל'] },
     })
     expect((await get({ city: 'חיפה', has_parking: 'true' })).json()).toMatchObject({ total: 0, total_pages: 0, rows: [] })
   })

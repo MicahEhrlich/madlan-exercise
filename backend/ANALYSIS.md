@@ -41,7 +41,9 @@ rounded percentage: below -5 is `Undervalued`, -5 through +5 inclusive is
 `Fairly Priced`, and above +5 is `Overpriced`.
 
 All accepted transaction dates are included without outlier removal, time or
-property-feature adjustments, or inferred location aliases. The result compares
+property-feature adjustments, or fuzzy location matching. Explicit city aliases
+and typography variants use the same canonical city identity as the dropdowns;
+original deal fields remain unchanged. The result compares
 this dataset's averages; it does not establish current market value.
 
 ## Grounding and failure behavior

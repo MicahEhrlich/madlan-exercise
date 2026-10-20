@@ -2,6 +2,7 @@ import type { DealsPage } from '../types/dealsPage'
 import { columns } from '../data/dealColumns'
 import { fetchWhenReady } from './fetchWhenReady'
 import { isFilteredSummary } from './isFilteredSummary'
+import { isLocationOptions } from './isLocationOptions'
 
 /** Reject malformed responses before they reach table formatting or pagination. */
 export function isDealsPage(value: unknown): value is DealsPage {
@@ -14,6 +15,7 @@ export function isDealsPage(value: unknown): value is DealsPage {
     page.total_pages !== Math.ceil((page.total as number) / (page.count as number))) return false
   if (!Array.isArray(page.rows) || page.rows.length > (page.count as number) || page.rows.length > (page.total as number)) return false
   if ('filtered_summary' in page && !isFilteredSummary(page.filtered_summary, page.total as number)) return false
+  if ('location_options' in page && !isLocationOptions(page.location_options)) return false
   return page.rows.every((row: unknown) => {
     if (!row || typeof row !== 'object') return false
     const deal = row as Record<string, unknown>
@@ -45,5 +47,10 @@ export async function fetchDeals(page: number, count: number, signal: AbortSigna
   if (!response.ok) throw new Error('לא ניתן לטעון את העסקאות מהשרת.')
   const data: unknown = await response.json()
   if (!isDealsPage(data) || data.page !== page || data.count !== count) throw new Error('התקבלו נתונים לא תקינים מהשרת.')
+  const filters = new URLSearchParams(filterQuery)
+  if (data.location_options && (data.location_options.scope.city !== (filters.get('city')?.trim() || null) ||
+    data.location_options.scope.neighborhood !== (filters.get('neighborhood')?.trim() || null))) {
+    throw new Error('התקבלו אפשרויות מיקום שאינן תואמות לסינון.')
+  }
   return data
 }

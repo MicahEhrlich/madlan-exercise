@@ -53,7 +53,7 @@ it('shares validated Redis results between analyzers without extending the origi
   const options = { anthropicApiKey: 'test', analysisTransport: transport, anthropicModel: 'configured' }
   const first = createDealAnalyzer(comparableDeals(), cache, logger(), options)
   const result = await first(savedDeal())
-  expect(cache.set).toHaveBeenCalledWith(expect.stringMatching(/^analysis:v1:/), expect.any(String), 300, expect.any(AbortSignal))
+  expect(cache.set).toHaveBeenCalledWith(expect.stringMatching(/^analysis:v2:/), expect.any(String), 300, expect.any(AbortSignal))
   await vi.advanceTimersByTimeAsync(299000)
   const second = createDealAnalyzer(comparableDeals(), cache, logger(), options)
   expect(await second(savedDeal())).toEqual(result)
@@ -75,7 +75,7 @@ it('separates dataset, row, model, and policy in cache keys', async () => {
     await createDealAnalyzer(deals, cache, logger(), { anthropicApiKey: 'test', anthropicModel: model, analysisTransport: transport })(target)
   }
   expect(new Set(cache.set.mock.calls.map(([key]) => key)).size).toBe(4)
-  expect(analysisCacheKey('dataset', 'row-2', 'model')).toBe('analysis:v1:dataset:["row-2","model"]')
+  expect(analysisCacheKey('dataset', 'row-2', 'model')).toBe('analysis:v2:dataset:["row-2","model"]')
 })
 
 it.each(['broken', 'unsupported', 'expired', 'far_future', 'get_failure', 'write_failure', 'offline'] as const)('survives %s cache data or infrastructure', async (failure) => {

@@ -37,7 +37,7 @@ it('caches complete responses, skips full-dataset recomputation on hits, and clo
   expect(cache.set).toHaveBeenCalledTimes(1)
   expect(cache.start).toHaveBeenCalledTimes(1)
   const [key, text, ttl] = cache.set.mock.calls[0]!
-  expect(key).toMatch(/^deals:v2:[a-f0-9]{64}:/)
+  expect(key).toMatch(/^deals:v4:[a-f0-9]{64}:/)
   expect(ttl).toBe(300)
   expect(JSON.parse(text).rows[1].fixed_fields).toEqual(['price_per_sqm'])
   await app.close()
