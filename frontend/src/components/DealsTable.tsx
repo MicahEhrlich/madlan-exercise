@@ -32,7 +32,7 @@ export default function DealsTable() {
         <button type="button" onClick={retry} className={buttonClass}>ניסיון נוסף</button>
       </div>}
       {!error && data && <>
-        <DealsTableView deals={data.rows} total={data.total} filters={filters} query={query}
+        <DealsTableView deals={data.rows} total={data.total} filters={filters} query={query} viewKey={JSON.stringify([page, count, appliedQuery])}
           onQueryChange={setQuery} onFilterChange={changeFilter}
           onRangeApply={(ranges) => {
             setFilters((current) => ({ ...current, ...ranges }))

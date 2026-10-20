@@ -15,6 +15,8 @@ export function isDealsPage(value: unknown): value is DealsPage {
   return page.rows.every((row: unknown) => {
     if (!row || typeof row !== 'object') return false
     const deal = row as Record<string, unknown>
+    if (typeof deal.row_id !== 'string' || !/^row-[1-9]\d*$/.test(deal.row_id) ||
+      !Number.isSafeInteger(Number(deal.row_id.slice(4))) || Number(deal.row_id.slice(4)) < 2) return false
     const allowedFields = ['deal_id', ...columns.filter(([key]) => key !== 'row_status').map(([key]) => key)]
     if (!Array.isArray(deal.fixed_fields) || !deal.fixed_fields.every((field: unknown) =>
       typeof field === 'string' && allowedFields.includes(field),

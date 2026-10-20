@@ -10,7 +10,7 @@ vi.mock('../src/deals/loadDeals.js', () => ({ loadDealsWithSummary: vi.fn() }))
 afterEach(() => { vi.useRealTimers(); vi.resetAllMocks() })
 
 const imported: DealImport = {
-  deals: Object.freeze([Object.freeze({ ...inspectDeal(validRow).deal, row_status: 'original' as const, fixed_fields: Object.freeze([]) })]),
+  deals: Object.freeze([Object.freeze({ ...inspectDeal(validRow).deal, row_id: 'row-2', row_status: 'original' as const, fixed_fields: Object.freeze([]) })]),
   summary: { total_rows: 1, parsed_rows: 1, completed_rows: 0 },
 }
 
@@ -28,7 +28,7 @@ it('serves processing immediately for slow imports and publishes the complete da
   try {
     await app.ready()
     expect((await app.inject('/health')).json()).toEqual({ status: 'ok' })
-    for (const path of ['/deals?page=1', '/deal', '/deals/summary']) {
+    for (const path of ['/deals?page=1', '/deal', '/deals/summary', '/deals/row-2/analysis']) {
       const response = await app.inject(path)
       expect(response.statusCode).toBe(202)
       expect(response.json()).toEqual({ status: 'processing', message: 'הנתונים עדיין בעיבוד. נא להמתין.' })
@@ -63,7 +63,7 @@ it('keeps the HTTP server available but returns a distinct failure after import 
     await app.ready()
     pending.fail()
     await expect(app.waitForDeals()).rejects.toThrow('private import failure')
-    for (const path of ['/deals', '/deal', '/deals/summary']) {
+    for (const path of ['/deals', '/deal', '/deals/summary', '/deals/row-2/analysis']) {
       const response = await app.inject(path)
       expect(response.statusCode).toBe(503)
       expect(response.json()).toEqual({ status: 'error', message: 'טעינת הנתונים נכשלה. נסו שוב מאוחר יותר.' })

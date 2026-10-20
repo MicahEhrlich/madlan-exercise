@@ -20,3 +20,11 @@ it.each([
 it('rejects a row claiming to be original with repaired fields', () => {
   expect(isDealsPage(page({ ...mockDeals[0], fixed_fields: ['street'] }))).toBe(false)
 })
+
+it.each([undefined, null, 2, '', 'D1', 'row-1', 'row-02', 'row-2.5', 'row-9007199254740992'])('rejects an invalid or missing row_id: %j', (row_id) => {
+  expect(isDealsPage(page({ ...mockDeals[0], row_id }))).toBe(false)
+})
+
+it('keeps row_id separate from repaired column names', () => {
+  expect(isDealsPage(page({ ...mockDeals[2], fixed_fields: ['row_id'] }))).toBe(false)
+})

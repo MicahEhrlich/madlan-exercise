@@ -4,7 +4,7 @@ import { dealsQuerySchema, queryDeals } from '../src/deals/queryDeals.js'
 import { inspectDeal } from '../src/deals/validateDeal.js'
 import { validRow } from './fixtures.js'
 
-const deal = { ...inspectDeal(validRow).deal, row_status: 'original' as const, fixed_fields: [] }
+const deal = { ...inspectDeal(validRow).deal, row_id: 'row-2', row_status: 'original' as const, fixed_fields: [] }
 const query = dealsQuerySchema.parse({})
 const response = queryDeals([deal], query)
 type Response = typeof response
@@ -24,6 +24,9 @@ it('accepts valid small numeric values without mistaking scientific notation for
 const corruptions: Record<string, (value: Response) => unknown> = {
   'null body': () => null,
   'missing metadata': (value) => ({ ...value, rows: [inspectDeal(validRow).deal] }),
+  'missing row ID': (value) => ({ ...value, rows: [{ ...deal, row_id: undefined }] }),
+  'invalid row ID': (value) => ({ ...value, rows: [{ ...deal, row_id: 'row-1' }] }),
+  'row ID in repaired fields': (value) => ({ ...value, rows: [{ ...deal, row_status: 'fixed', fixed_fields: ['row_id'] }] }),
   'invalid fields': (value) => ({ ...value, rows: [{ ...deal, row_status: 'fixed', fixed_fields: ['invented'] }] }),
   'duplicate fields': (value) => ({ ...value, rows: [{ ...deal, row_status: 'fixed', fixed_fields: ['floor', 'floor'] }] }),
   'inconsistent status': (value) => ({ ...value, rows: [{ ...deal, fixed_fields: ['floor'] }] }),

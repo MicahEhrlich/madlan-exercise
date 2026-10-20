@@ -4,7 +4,7 @@ import type { DealsCache } from '../src/cache/types.js'
 export function fakeCache() {
   const entries = new Map<string, { value: string; expires: number }>()
   const cache = {
-    ready: true,
+    ready: true as boolean,
     start: vi.fn(),
     close: vi.fn(),
     get: vi.fn<DealsCache['get']>(async (key) => {

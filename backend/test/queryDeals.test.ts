@@ -112,7 +112,7 @@ describe('GET /deals', () => {
   })
 
   it('accepts every specified filter together with typed exact matching', async () => {
-    const { deal_id: _id, row_status: _status, fixed_fields: _fixedFields, ...filters } = server.deals[0]!
+    const { deal_id: _id, row_id: _rowId, row_status: _status, fixed_fields: _fixedFields, ...filters } = server.deals[0]!
     const query = Object.fromEntries(Object.entries(filters).map(([key, value]) => [key, String(value)]))
     expect((await get(query)).json().rows).toEqual([server.deals[0]])
     // Independently exercise each filter rather than letting another field mask it.

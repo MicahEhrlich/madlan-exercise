@@ -168,6 +168,15 @@ starting the Redis client, without waiting for model requests to complete.
 
 ### Querying deals
 
+Each saved row includes a unique `row_id` (`row-<logical CSV record number>`),
+independent of repeated deal IDs, filtering, pagination, and deferred repairs.
+Excluded rows leave gaps; IDs remain stable while the source file is unchanged.
+This metadata is separate from CSV columns and `fixed_fields`.
+
+`GET /deals/:row_id/analysis` provides an LLM assessment using accepted rows and
+repaired values. See [the analysis endpoint contract](ANALYSIS.md) for eligibility,
+comparison rules, response formats, deadlines, and caching.
+
 `GET /deals/summary` returns the completed import's global counts:
 `{ total_rows, parsed_rows, completed_rows }`. `total_rows` counts source CSV
 records, including rejected/duplicate records, excluding the header and empty

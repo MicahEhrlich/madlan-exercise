@@ -54,7 +54,7 @@ export async function loadDealsWithSummary(logger: LoadLogger, csvPath: string |
       logger.info({ recordNumber, original: original.city, corrected: deal.city }, 'CSV city translated by LLM')
     }
     const row_status = fixed_fields.length ? 'fixed' : 'original'
-    entries.push({ recordNumber, deal: Object.freeze({ ...deal, row_status, fixed_fields }) })
+    entries.push({ recordNumber, deal: Object.freeze({ ...deal, row_id: `row-${recordNumber}`, row_status, fixed_fields }) })
     return idCollision
   }
   const repairs = createRepairSession(logger, options, (candidate, deal) => {

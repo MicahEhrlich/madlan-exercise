@@ -1,5 +1,34 @@
 # React + TypeScript + Vite
 
+Each API row carries a validated `row_id` used as its React key. This metadata is
+separate from display columns, filters, and repaired fields. It identifies the
+saved CSV record for `GET /deals/:row_id/analysis`.
+
+Click a table row or its accessible toggle button to expand deal details directly
+under that row. Only one panel is open at a time; clicking the selected row again
+or its close button collapses it. The close button returns focus to the row toggle.
+Clicks inside the panel keep it open. Pagination, page size, filters, and applied
+search changes close the panel. Details show city, street, neighborhood, year
+built, rooms, size, price, and price per sqm immediately from the parsed row.
+The RTL panel is sized to the table scroller's visible width using a container
+query and sticky alignment, with wrapping text and responsive detail columns.
+
+Expanded rows request analysis through TanStack Query and `useDealAnalysis`.
+When both street and neighborhood are absent, blank, or case-insensitive `unknown`,
+no analysis request is made and a Hebrew explanation is shown. Otherwise the
+panel shows a reduced-motion-aware spinner and `מנתח עסקה` while loading, followed
+by the assessment, discount/premium relative to the comparison dataset, strengths,
+and risks. Unavailable responses, request errors, and timeouts have separate Hebrew
+states and manual retry. Deal details remain visible throughout.
+
+Analysis responses are validated for shape, finite numeric values, assessment
+consistency, and explanation arrays. Query keys include the API base URL, row ID,
+and complete deal snapshot. Successful results stay fresh for five minutes;
+unavailable/error results can be retried manually or by reopening. Closing or
+switching rows cancels the request, and late responses cannot replace the newly
+selected row's analysis. Existing request deadlines, processing polls, and disabled
+automatic retries remain in effect. No backend API changes are needed.
+
 All frontend API requests run through TanStack Query. `ApiProvider` owns a stable
 query client; `useDeals` and `useImportSummary` use the shared `useApiQuery` hook
 for loading, errors, cancellation, and manual retry. Query keys include the API

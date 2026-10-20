@@ -30,6 +30,7 @@ export const dealHeaders = [
 export type RawDeal = Record<keyof Deal, string>
 /** Import metadata is separate from source CSV fields and model repair payloads. */
 export interface SavedDeal extends Deal {
+  row_id: string
   row_status: 'original' | 'fixed'
   fixed_fields: readonly (keyof Deal)[]
 }

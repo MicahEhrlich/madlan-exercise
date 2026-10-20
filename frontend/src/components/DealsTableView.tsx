@@ -6,8 +6,9 @@ import { hasInvalidRanges } from '../utils/filterDeals'
 import { formatValue } from '../utils/formatValue'
 import ColumnFilter from './ColumnFilter'
 import SearchBar from './SearchBar'
-import DealCell from './DealCell'
+import DealRow from './DealRow'
 import RangeFilter from './RangeFilter'
+import { useExpandedDeal } from '../hooks/useExpandedDeal'
 
 interface DealsTableViewProps {
   deals: PropertyDeal[]
@@ -18,12 +19,14 @@ interface DealsTableViewProps {
   onFilterChange: (key: FilterKey, value: string) => void
   onRangeApply: (ranges: DealFilters) => void
   onReset: () => void
+  viewKey?: string
 }
 
-export default function DealsTableView({ deals, total, query, filters, onQueryChange, onFilterChange, onRangeApply, onReset }: DealsTableViewProps) {
+export default function DealsTableView({ deals, total, query, filters, onQueryChange, onFilterChange, onRangeApply, onReset, viewKey }: DealsTableViewProps) {
   const [rangeDrafts, setRangeDrafts] = useState<DealFilters>({})
   const [openRange, setOpenRange] = useState<RangeField | null>(null)
   const selectedRanges = { ...filters, ...rangeDrafts }
+  const { expandedRowId, toggle, close } = useExpandedDeal(JSON.stringify([viewKey ?? query, filters]))
 
   return (
     <section aria-labelledby="table-title" className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
@@ -32,9 +35,9 @@ export default function DealsTableView({ deals, total, query, filters, onQueryCh
         <span role="status" className="rounded-full bg-teal-50 dark:bg-teal-950 px-3 py-1 text-sm font-medium text-teal-800 dark:text-teal-300">{deals.length} מתוך {total} עסקאות</span>
       </div>
       <SearchBar value={query} onChange={onQueryChange} onReset={() => { setRangeDrafts({}); setOpenRange(null); onReset() }} />
-      <p id="table-scroll-hint" className="border-b border-slate-100 dark:border-slate-800 px-6 py-3 text-xs text-slate-500 dark:text-slate-400">ניתן לגלול אופקית לצפייה בכל העמודות.</p>
+      <p id="table-scroll-hint" className="border-b border-slate-100 dark:border-slate-800 px-6 py-3 text-xs text-slate-500 dark:text-slate-400">ניתן לגלול אופקית לצפייה בכל העמודות. לחצו על עסקה לצפייה בפרטים ובניתוח.</p>
       {/* Mirror the scroller vertically to place its native scrollbar at the top; mirror the table back to keep its contents upright. */}
-      <div role="region" aria-label="טבלת עסקאות לגלילה אופקית" aria-describedby="table-scroll-hint" tabIndex={0} className="-scale-y-100 overflow-x-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-teal-600">
+      <div role="region" aria-label="טבלת עסקאות לגלילה אופקית" aria-describedby="table-scroll-hint" tabIndex={0} className="@container -scale-y-100 overflow-x-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-teal-600">
         <table aria-describedby="data-notice" className="-scale-y-100 w-full border-collapse whitespace-nowrap text-start text-sm">
           <caption className="sr-only">עסקאות נדל״ן — העמוד הנוכחי</caption>
           <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
@@ -63,12 +66,8 @@ export default function DealsTableView({ deals, total, query, filters, onQueryCh
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {deals.map((deal) => (
-              <tr key={`${deal.city}-${deal.street}-${deal.deal_date}`} className="transition-colors hover:bg-teal-50/50 dark:hover:bg-teal-950/50">
-                {columns.map(([key, label]) => (
-                  <DealCell key={key} field={key} label={label} value={deal[key]}
-                    repaired={key !== 'row_status' && deal.fixed_fields.includes(key)} />
-                ))}
-              </tr>
+              <DealRow key={deal.row_id} deal={deal} expanded={expandedRowId === deal.row_id}
+                onToggle={() => toggle(deal.row_id)} onClose={close} />
             ))}
             {deals.length === 0 && (
               <tr><td colSpan={columns.length} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">לא נמצאו עסקאות התואמות לחיפוש ולמסננים.</td></tr>

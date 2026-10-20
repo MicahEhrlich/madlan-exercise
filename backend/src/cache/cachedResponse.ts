@@ -5,8 +5,10 @@ import type { RawDeal } from '../deals/types.js'
 import { validateDeal } from '../deals/validateDeal.js'
 import { queryDeals } from '../deals/queryDeals.js'
 import type { DealsQuery } from '../deals/queryDeals.js'
+import { rowIdSchema } from '../deals/rowId.js'
 
 const savedDealSchema = dealSchema.extend({
+  row_id: rowIdSchema,
   row_status: z.enum(['original', 'fixed']),
   fixed_fields: z.array(z.enum(dealHeaders)),
 }).refine((row) => {

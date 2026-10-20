@@ -23,5 +23,6 @@ export interface PropertyDealValues {
 export type FixedField = Exclude<keyof PropertyDealValues, 'row_status'> | 'deal_id'
 
 export interface PropertyDeal extends PropertyDealValues {
+  row_id: string
   fixed_fields: readonly FixedField[]
 }
