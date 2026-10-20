@@ -3,6 +3,7 @@ import { columns } from '../data/dealColumns'
 import { fetchWhenReady } from './fetchWhenReady'
 import { isFilteredSummary } from './isFilteredSummary'
 import { isLocationOptions } from './isLocationOptions'
+import { isFilterOptions } from './isFilterOptions'
 
 /** Reject malformed responses before they reach table formatting or pagination. */
 export function isDealsPage(value: unknown): value is DealsPage {
@@ -16,6 +17,7 @@ export function isDealsPage(value: unknown): value is DealsPage {
   if (!Array.isArray(page.rows) || page.rows.length > (page.count as number) || page.rows.length > (page.total as number)) return false
   if ('filtered_summary' in page && !isFilteredSummary(page.filtered_summary, page.total as number)) return false
   if ('location_options' in page && !isLocationOptions(page.location_options)) return false
+  if ('filter_options' in page && !isFilterOptions(page.filter_options)) return false
   return page.rows.every((row: unknown) => {
     if (!row || typeof row !== 'object') return false
     const deal = row as Record<string, unknown>

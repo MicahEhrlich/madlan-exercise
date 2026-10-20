@@ -9,6 +9,7 @@ import { rowIdSchema } from '../deals/rowId.js'
 import { filteredSummarySchema } from '../deals/filteredSummary.js'
 import { locationOptionsSchema } from '../deals/locationOptions.js'
 import { cityName } from '../deals/cityName.js'
+import { filterOptionsSchema } from '../deals/filterOptions.js'
 
 const savedDealSchema = dealSchema.extend({
   row_id: rowIdSchema,
@@ -36,6 +37,7 @@ const responseSchema = z.strictObject({
   rows: z.array(savedDealSchema),
   filtered_summary: filteredSummarySchema,
   location_options: locationOptionsSchema,
+  filter_options: filterOptionsSchema,
 })
 
 /** Treat invalid JSON, pagination, row values, or repair metadata as a miss. */

@@ -1,5 +1,15 @@
 # React + TypeScript + Vite
 
+The four amenity filters always offer `הכול`, `כן`, and `לא`, including after a
+selection or when there are no matching rows. Boolean labels are formatted from
+their filter value rather than whichever booleans happen to be on the current
+page. Property type, condition, and source options come from `/deals.filter_options`, a
+catalog of all accepted values independent of current filters and pagination.
+Users can switch directly between values without clearing first; unknown
+conditions display as `לא ידוע`. The existing city/neighborhood/street hierarchy
+is unchanged. Catalog metadata is validated and uses the existing TanStack Query
+request; older servers retain a page-based fallback for missing catalog fields.
+
 Location dropdowns follow city → neighborhood → street. All cities stay available;
 neighborhood options are scoped only to the selected city, and streets only to
 the selected city and neighborhood. Lists come from `/deals.location_options`

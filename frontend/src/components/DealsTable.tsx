@@ -37,6 +37,7 @@ export default function DealsTable() {
         <DealsTableView deals={data.rows} total={data.total} filters={filters} query={query} viewKey={JSON.stringify([page, count, appliedQuery])}
           summary={data.filtered_summary} summaryLoading={loading}
           locationOptions={data.location_options}
+          filterOptions={data.filter_options}
           onQueryChange={setQuery} onFilterChange={changeFilter}
           onPresetToggle={(id) => {
             setFilters((current) => toggleInvestmentPreset(current, id))

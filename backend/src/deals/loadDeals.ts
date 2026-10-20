@@ -13,7 +13,7 @@ import { canAttemptRepair } from '../repairs/repairEvidence.js'
 import { createCityTranslator } from '../repairs/cityTranslation.js'
 import type { CityTranslationOptions } from '../repairs/cityTranslation.js'
 
-export const defaultCsvPath = new URL('../../../madlan_deals_sample (3) (2) (1) (1).csv', import.meta.url)
+export const defaultCsvPath = new URL('../../assets/madlan_deals_sample.csv', import.meta.url)
 
 type LoadLogger = Pick<FastifyBaseLogger, 'warn' | 'info'>
 export interface LoadDealsOptions extends RepairOptions, CityTranslationOptions {

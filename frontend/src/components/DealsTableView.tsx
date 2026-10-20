@@ -3,7 +3,6 @@ import { columns, numericFilterColumns } from '../data/dealColumns'
 import type { PropertyDeal } from '../types/propertyDeal'
 import type { DealFilters, FilterKey, RangeField } from '../utils/filterDeals'
 import { hasInvalidRanges } from '../utils/filterDeals'
-import { formatValue } from '../utils/formatValue'
 import ColumnFilter from './ColumnFilter'
 import SearchBar from './SearchBar'
 import DealRow from './DealRow'
@@ -15,6 +14,8 @@ import FilteredResultsSummary from './FilteredResultsSummary'
 import type { FilteredSummary } from '../types/filteredSummary'
 import type { LocationOptions } from '../types/locationOptions'
 import { locationFilterOptions } from '../utils/locationFilterOptions'
+import type { FilterOptions } from '../types/filterOptions'
+import { columnFilterOptions, formatColumnFilterOption } from '../utils/columnFilterOptions'
 
 interface DealsTableViewProps {
   deals: PropertyDeal[]
@@ -30,9 +31,10 @@ interface DealsTableViewProps {
   summary?: FilteredSummary
   summaryLoading?: boolean
   locationOptions?: LocationOptions
+  filterOptions?: FilterOptions
 }
 
-export default function DealsTableView({ deals, total, query, filters, onQueryChange, onFilterChange, onRangeApply, onReset, onPresetToggle, viewKey, summary, summaryLoading = false, locationOptions }: DealsTableViewProps) {
+export default function DealsTableView({ deals, total, query, filters, onQueryChange, onFilterChange, onRangeApply, onReset, onPresetToggle, viewKey, summary, summaryLoading = false, locationOptions, filterOptions }: DealsTableViewProps) {
   const [rangeDrafts, setRangeDrafts] = useState<DealFilters>({})
   const [openRange, setOpenRange] = useState<RangeField | null>(null)
   const selectedRanges = { ...filters, ...rangeDrafts }
@@ -70,11 +72,11 @@ export default function DealsTableView({ deals, total, query, filters, onQueryCh
                     label={label}
                     value={key === 'city' ? locations.city.value : filters[key] ?? ''}
                     options={key === 'city' || key === 'neighborhood' || key === 'street' ? locations[key].options
-                      : [...new Set([...deals.map((deal) => String(deal[key])), ...(filters[key] ? [filters[key]] : [])])]}
+                      : columnFilterOptions(key, deals, filters, filterOptions)}
                     disabled={(key === 'city' || key === 'neighborhood' || key === 'street') && locations[key].disabled}
                     emptyOptionLabel={(key === 'neighborhood' || key === 'street') && locations[key].disabled
                       ? filters.city ? 'טוען אפשרויות…' : 'יש לבחור עיר תחילה' : 'הכול'}
-                    formatOption={(value) => formatValue(deals.find((deal) => String(deal[key]) === value)?.[key] ?? value, key)}
+                    formatOption={(value) => formatColumnFilterOption(key, value, deals)}
                     onChange={(value) => onFilterChange(key, value)}
                   />}
                 </th>

@@ -5,6 +5,7 @@ import { neighborhoodDiscounts } from './neighborhoodDiscounts.js'
 import { filteredSummary } from './filteredSummary.js'
 import { createLocationOptions } from './locationOptions.js'
 import { cityName } from './cityName.js'
+import { createFilterOptions } from './filterOptions.js'
 
 const text = z.string().trim().min(1)
 const numeric = z.string().regex(/^\d+(?:\.\d+)?$/).transform(Number).pipe(z.number().finite())
@@ -50,7 +51,7 @@ export const dealsQuerySchema = z.strictObject({
 export type DealsQuery = z.infer<typeof dealsQuerySchema>
 
 export function queryDeals(deals: DealCollection, query: DealsQuery, neighborhoodDiscountIds?: ReadonlySet<string>,
-  locationOptions = createLocationOptions(deals)) {
+  locationOptions = createLocationOptions(deals), filterOptions = createFilterOptions(deals)) {
   const { page, count, q = '', size_sqm_min, size_sqm_max, price_nis_min, price_nis_max,
     price_per_sqm_min, price_per_sqm_max, year_built_min, below_neighborhood_average, city, ...filters } = query
   const discountIds = below_neighborhood_average ? neighborhoodDiscountIds ?? neighborhoodDiscounts(deals) : undefined
@@ -75,6 +76,7 @@ export function queryDeals(deals: DealCollection, query: DealsQuery, neighborhoo
     total_pages: Math.ceil(matches.length / count),
     filtered_summary: filteredSummary(matches, deals),
     location_options: locationOptions(query),
+    filter_options: filterOptions,
     rows: matches.slice(offset, offset + count),
   }
 }
