@@ -1,7 +1,7 @@
 import { setImmediate } from 'node:timers/promises'
 import type { FastifyBaseLogger } from 'fastify'
 import { defaultBatchSize, readDealBatches } from './readDealBatches.js'
-import type { Deal, DealCollection, RawDeal } from './types.js'
+import type { Deal, DealCollection, RawDeal, SavedDeal } from './types.js'
 import { prepareDeal } from './prepareDeal.js'
 import { dealKey } from './dealKey.js'
 import { createRepairSession } from '../repairs/repairSession.js'
@@ -18,7 +18,7 @@ export interface LoadDealsOptions extends RepairOptions {
 }
 
 export async function loadDeals(logger: LoadLogger, csvPath: string | URL = defaultCsvPath, options: LoadDealsOptions = {}): Promise<DealCollection> {
-  const entries: { recordNumber: number; deal: Readonly<Deal> }[] = []
+  const entries: { recordNumber: number; deal: Readonly<SavedDeal> }[] = []
   const seenIds = new Set<string>()
   const seenDeals = new Set<string>()
   // Keep identities, not raw rows: lookup candidates are streamed again only
@@ -34,23 +34,23 @@ export async function loadDeals(logger: LoadLogger, csvPath: string | URL = defa
     rejected++
     logger.warn({ recordNumber, rawFields, reasons }, 'Rejected CSV deal')
   }
-  const save = (recordNumber: number, deal: Deal) => {
+  const save = (recordNumber: number, deal: Deal, row_status: SavedDeal['row_status']) => {
     const idCollision = seenIds.has(deal.deal_id)
     if (idCollision) {
       logger.info({ recordNumber, deal_id: deal.deal_id, city: deal.city, street: deal.street }, 'CSV ID collision retained by code')
     }
     seenIds.add(deal.deal_id)
     seenDeals.add(dealKey(deal))
-    entries.push({ recordNumber, deal: Object.freeze(deal) })
+    entries.push({ recordNumber, deal: Object.freeze({ ...deal, row_status }) })
     return idCollision
   }
   const repairs = createRepairSession(logger, options, (candidate, deal) => {
     // Pending identities are resolved before processing the same ID and address again.
-    save(candidate.recordNumber, deal)
+    save(candidate.recordNumber, deal, 'fixed')
     llmCorrected++
     logger.info({ recordNumber: candidate.recordNumber, original: candidate.original, corrected: deal, dateDayDefaulted: dateRepairEvidence(candidate.original.deal_date)?.dayDefaulted ?? false }, 'CSV deal corrected by LLM')
   }, (candidate, reason) => reject(candidate.recordNumber, candidate.rawFields, [...candidate.reasons, reason]), (candidate, deal, reason) => {
-    save(candidate.recordNumber, deal)
+    save(candidate.recordNumber, deal, 'fixed')
     codeCorrected++
     logger.info({ recordNumber: candidate.recordNumber, year_built: deal.year_built, neighborhood: deal.neighborhood, reason }, 'CSV deal retained with unknown lookup values')
   })
@@ -90,7 +90,7 @@ export async function loadDeals(logger: LoadLogger, csvPath: string | URL = defa
           logger.info({ recordNumber, ...correction }, 'CSV field corrected by code')
         }
         if ('deal' in prepared.result) {
-          const idCollision = save(recordNumber, prepared.result.deal)
+          const idCollision = save(recordNumber, prepared.result.deal, prepared.corrected ? 'fixed' : 'original')
           if (prepared.corrected || idCollision) codeCorrected++
           else originalAccepted++
         } else {

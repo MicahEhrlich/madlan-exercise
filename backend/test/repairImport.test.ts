@@ -33,7 +33,7 @@ it.each(['disabled', 'failed', 'invalid', 'unsupported', 'unknown'] as const)('r
     anthropicApiKey: mode === 'disabled' ? undefined : 'test', repairTransport: transport,
   })
   expect(deals).toHaveLength(1)
-  expect(deals[0]).toMatchObject({ year_built: 'unknown', neighborhood: 'unknown', city: 'חיפה', has_parking: false })
+  expect(deals[0]).toMatchObject({ row_status: 'fixed', year_built: 'unknown', neighborhood: 'unknown', city: 'חיפה', has_parking: false })
   expect(transport).toHaveBeenCalledTimes(mode === 'disabled' ? 0 : 1)
   expect(log.info).toHaveBeenCalledWith({ total: 1, accepted: 1, rejected: 0 }, 'Deals CSV load complete')
 })
@@ -63,6 +63,7 @@ it('accumulates repair rows across parsing batches, flushes at EOF, and preserve
   const deals = await loadDeals(log, path, { anthropicApiKey: 'test', repairTransport: transport, batchSize: 1, llmBatchSize: 2 })
   expect(transport.mock.calls.map(([request]) => request.candidates.map((row) => row.original.deal_id))).toEqual([['D1', 'D3'], ['D6']])
   expect(deals.map((row) => row.deal_id)).toEqual(['D1', 'D2', 'D3', 'D4', 'D5', 'D6'])
+  expect(deals.map((row) => row.row_status)).toEqual(['fixed', 'original', 'fixed', 'original', 'fixed', 'fixed'])
   expect(Object.isFrozen(deals)).toBe(true)
   expect(deals.every(Object.isFrozen)).toBe(true)
   expect(log.info).toHaveBeenCalledWith({ originalAccepted: 2, codeCorrected: 1, llmCorrected: 3 }, 'Deals CSV correction summary')
@@ -114,7 +115,7 @@ it('publishes repaired deals before serving the unchanged health endpoint', asyn
     expect(result.statusCode).toBe(200)
     expect(result.json()).toEqual({ status: 'ok' })
     expect(app.deals[0]!.has_parking).toBe(true)
-    expect((await app.inject('/deals')).statusCode).toBe(404)
+    expect((await app.inject('/deals')).json().rows).toEqual(app.deals)
   } finally { await app.close() }
 })
 
@@ -224,6 +225,7 @@ it('attempts eligible fact lookups with full context, retains unknown years, and
   expect(profile).toMatchObject({ total_floors: '4', size_sqm: '100', rooms: '3', has_elevator: 'כן', has_parking: 'no', has_balcony: '1', has_safe_room: 'yes' })
   expect(deals.map((row) => row.deal_id)).toEqual(['D1', 'unknown-year', 'neighborhood'])
   expect(deals[1]!.year_built).toBe('unknown')
+  expect(deals.map((row) => row.row_status)).toEqual(['original', 'fixed', 'fixed'])
   expect(log.info).toHaveBeenCalledWith({ total: 4, accepted: 3, rejected: 1 }, 'Deals CSV load complete')
   expect(log.info).toHaveBeenCalledWith(expect.objectContaining({ lookupSources: [expect.objectContaining({ field: 'neighborhood', url: 'https://city.example/streets' })] }), 'CSV repair batch complete')
 })

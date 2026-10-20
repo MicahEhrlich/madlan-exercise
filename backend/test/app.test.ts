@@ -23,7 +23,7 @@ it('loads once before health requests and logs rejected rows separately', async 
     await app.inject({ method: 'GET', url: '/health' })
     expect(logs.filter((log) => log.msg === 'Rejected CSV deal')).toHaveLength(1)
     expect(logs.filter((log) => log.msg === 'Deals CSV load complete')).toEqual([expect.objectContaining({ accepted: 1, rejected: 1, total: 2 })])
-    expect((await app.inject('/deals')).statusCode).toBe(404)
+    expect((await app.inject('/deals')).json().rows).toEqual(app.deals)
   } finally {
     await app.close()
   }

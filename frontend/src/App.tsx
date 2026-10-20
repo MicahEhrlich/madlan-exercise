@@ -1,6 +1,5 @@
 import ThemeToggle from './components/ThemeToggle'
 import DealsTable from './components/DealsTable'
-import { mockDeals } from './data/mockDeals'
 
 function App() {
   return (
@@ -10,12 +9,12 @@ function App() {
         <header className="mb-8">
           <p className="mb-2 text-sm font-medium text-teal-700 dark:text-teal-400">סקירת עסקאות נדל״ן</p>
           <h1 className="text-3xl font-bold tracking-tight">טבלת עסקאות</h1>
-          <p id="mock-notice" className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-            נתוני דמה להמחשה בלבד — הרשומות אינן מייצגות עסקאות אמיתיות.
+          <p id="data-notice" className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+            העסקאות נטענות מהשרת. החיפוש והמסננים חלים על כל העמודים.
           </p>
         </header>
 
-        <DealsTable deals={mockDeals} />
+        <DealsTable />
       </div>
     </main>
   )

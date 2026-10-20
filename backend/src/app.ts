@@ -3,6 +3,7 @@ import type { FastifyServerOptions } from 'fastify'
 import { loadDeals } from './deals/loadDeals.js'
 import type { LoadDealsOptions } from './deals/loadDeals.js'
 import type { DealCollection } from './deals/types.js'
+import { dealsQuerySchema, queryDeals } from './deals/queryDeals.js'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -21,6 +22,17 @@ export function buildApp(options: FastifyServerOptions = {}, data: LoadDealsOpti
   })
 
   app.get('/health', async () => ({ status: 'ok' }))
+
+  app.get('/deals', async (request, reply) => {
+    const parsed = dealsQuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: 'פרמטרי החיפוש אינם תקינים',
+        fields: parsed.error.issues.map((issue) => issue.path.join('.')),
+      })
+    }
+    return queryDeals(app.deals, parsed.data)
+  })
 
   return app
 }

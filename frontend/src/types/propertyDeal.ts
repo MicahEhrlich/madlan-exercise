@@ -1,11 +1,12 @@
 export interface PropertyDeal {
+  row_status: 'original' | 'fixed'
   city: string
   neighborhood: string
   street: string
   property_type: string
   rooms: number
   size_sqm: number
-  floor: number
+  floor: number | 'unknown'
   total_floors: number
   year_built: number | 'unknown'
   condition: string

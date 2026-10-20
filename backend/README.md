@@ -62,7 +62,43 @@ deploying. The file is never modified.
 
 Accepted deals are available internally as `app.deals`, a typed, frozen array of
 frozen objects. Loading happens once per server instance; updates require a
-restart. There is no deals endpoint, database, or frontend integration yet.
+restart. `GET /deals` exposes the collection with filtering and pagination.
+The frontend loads this endpoint with pagination. There is no database yet.
+
+### Querying deals
+
+`GET /deals` accepts optional exact-match filters: `city`, `neighborhood`,
+`street`, `property_type`, `rooms`, `size_sqm`, `floor`, `total_floors`,
+`year_built`, `condition`, `has_elevator`, `has_parking`, `has_balcony`,
+`has_safe_room`, `deal_date`, `price_nis`, `price_per_sqm`, `source`, and `row_status`.
+All supplied filters must match. Text is trimmed; dates use `YYYY-MM-DD`.
+Boolean parameters accept exactly `true` or `false`. `year_built` accepts a
+positive integer or `unknown`. Numeric filters use decimal numbers; floor and
+total floors accept nonnegative integers. `floor` also accepts `unknown`.
+`row_status` accepts `original` or `fixed`. Filtering uses the saved, repaired data.
+The optional `q` parameter searches raw values and Hebrew display values across
+table columns. Search and filters combine before calculating totals and pages.
+
+`page` starts at 1 (default: 1). `count` is the maximum rows per page (default:
+20, maximum: 100). Both must be positive safe integers. Invalid, repeated, or
+unsupported parameters return HTTP 400 with a Hebrew error and affected field
+paths. Filters are applied before pagination, preserving CSV import order.
+
+Example: `GET /deals?rooms=3&has_parking=false&page=1&count=10`
+
+The JSON response contains `page`, `count`, `total` (matching rows), `total_pages`,
+and `rows` (complete saved deals, including `deal_id` and `row_status`). No matches
+produce `total: 0`, `total_pages: 0`, and `rows: []`. A page beyond the last page
+returns an empty `rows` array while retaining the matching totals. URL-encode
+Hebrew text when constructing requests, for example with `URLSearchParams`.
+
+Every saved row includes `row_status: 'original' | 'fixed'`. Code corrections
+(including derived values and missing-value defaults), verified model repairs,
+and safe lookup fallbacks are `fixed`. Ordinary parsing, whitespace trimming,
+boolean normalization, and retaining a reused ID without changing data remain
+`original`. This metadata is assigned by the loader, separately from the 19 CSV
+columns and model payloads; the source CSV is unchanged. The frontend mock table
+shows the same status field as מקורית / הושלמו על ידי המערכת and supports searching and filtering it.
 
 ### Streaming and batches
 
@@ -293,4 +329,4 @@ error bodies or credentials. A sample-file regression test simulates a failed
 lookup and verifies **510 accepted / 20 rejected** with explicit unknown values;
 actual live counts still depend on model responses and deadlines.
 Backend tests mock the SDK and transport; no paid API calls are made during
-verification. There are no new HTTP endpoints or frontend changes.
+verification.

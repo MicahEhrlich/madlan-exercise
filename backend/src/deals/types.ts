@@ -28,5 +28,10 @@ export const dealHeaders = [
 ] as const satisfies readonly (keyof Deal)[]
 
 export type RawDeal = Record<keyof Deal, string>
-export type DealCollection = readonly Readonly<Deal>[]
+/** Import metadata is separate from source CSV fields and model repair payloads. */
+export interface SavedDeal extends Deal {
+  row_status: 'original' | 'fixed'
+}
+
+export type DealCollection = readonly Readonly<SavedDeal>[]
 export type ValidationResult = { deal: Deal; reasons: [] } | { reasons: string[] }

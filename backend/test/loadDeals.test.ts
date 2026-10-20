@@ -1,4 +1,4 @@
-import { rm } from 'node:fs/promises'
+import { readFile, rm } from 'node:fs/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { loadDeals } from '../src/deals/loadDeals.js'
 import { dealHeaders } from '../src/deals/types.js'
@@ -15,6 +15,22 @@ afterEach(async () => { await Promise.all(directories.splice(0).map((directory) 
 const logger = () => ({ warn: vi.fn(), info: vi.fn() })
 
 describe('CSV loader', () => {
+  it('stores status for every accepted row without modifying source CSV or treating normalization as a repair', async () => {
+    const content = csv([
+      {},
+      { deal_id: 'D2', price_per_sqm: '' },
+      { deal_id: ' D3 ', city: ' חיפה ', has_parking: 'FALSE' },
+      { deal_id: 'D4', floor: '', condition: '', has_parking: '' },
+      { deal_id: 'D5', deal_date: 'Mar 2023' },
+    ])
+    const path = await file(content)
+    const deals = await loadDeals(logger(), path, { batchSize: 1 })
+    expect(deals.map((deal) => deal.row_status)).toEqual(['original', 'fixed', 'original', 'fixed', 'fixed'])
+    expect(await readFile(path, 'utf8')).toBe(content)
+    expect(dealHeaders).not.toContain('row_status')
+    expect(deals.every(Object.isFrozen)).toBe(true)
+  })
+
   it.each([undefined, 'test'])('loads MMM YYYY dates without a model request (API key: %s)', async (anthropicApiKey) => {
     const repairTransport = vi.fn()
     const log = logger()
@@ -179,6 +195,7 @@ it('retains reused IDs at different cities or streets without changing row data 
     { deal_id: 'D2', city: 'חיפה', street: 'הרצל' },
   ])
   expect(repairTransport).not.toHaveBeenCalled()
+  expect(deals.map((deal) => deal.row_status)).toEqual(['original', 'original', 'original', 'original'])
   expect(log.info).toHaveBeenCalledWith({ originalAccepted: 2, codeCorrected: 2, llmCorrected: 0 }, 'Deals CSV correction summary')
   expect(log.info).toHaveBeenCalledWith({ total: 5, accepted: 4, rejected: 1 }, 'Deals CSV load complete')
   expect(log.info.mock.calls.filter((call) => call[1] === 'CSV ID collision retained by code')).toHaveLength(2)

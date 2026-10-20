@@ -1,6 +1,7 @@
 import type { PropertyDeal } from '../types/propertyDeal'
 
 export const columns = [
+  ['row_status', 'סטטוס רשומה'],
   ['city', 'עיר'],
   ['neighborhood', 'שכונה'],
   ['street', 'רחוב'],

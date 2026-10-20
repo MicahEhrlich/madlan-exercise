@@ -13,7 +13,7 @@ export function filterDeals(deals: PropertyDeal[], query: string, filters: DealF
       return !filter || String(deal[key]) === filter
     })
     const matchesSearch = !search || columns.some(([key]) =>
-      `${deal[key]} ${formatValue(deal[key])}`.toLocaleLowerCase('he-IL').includes(search),
+      `${deal[key]} ${formatValue(deal[key], key)}`.toLocaleLowerCase('he-IL').includes(search),
     )
     return matchesFilters && matchesSearch
   })
