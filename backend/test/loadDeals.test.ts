@@ -2,6 +2,7 @@ import { rm } from 'node:fs/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { loadDeals } from '../src/deals/loadDeals.js'
 import { dealHeaders } from '../src/deals/types.js'
+import { dealKey } from '../src/deals/dealKey.js'
 import { csv, fixture } from './fixtures.js'
 
 const directories: string[] = []
@@ -28,9 +29,9 @@ describe('CSV loader', () => {
 
   it('keeps first valid ID; logs invalid rows and later duplicates with original data and reasons', async () => {
     const path = await file(csv([
-      { deal_id: 'D1', size_sqm: '' },
+      { deal_id: 'D1', rooms: '' },
       { deal_id: ' D1 ' },
-      { deal_id: 'D1', street: 'later' },
+      { deal_id: 'D1' },
       { deal_id: 'D2', has_parking: 'unknown', city: '' },
       { deal_id: 'D3' },
     ]))
@@ -38,9 +39,9 @@ describe('CSV loader', () => {
     const deals = await loadDeals(log, path)
     expect(deals.map((deal) => deal.deal_id)).toEqual(['D1', 'D3'])
     expect(log.warn).toHaveBeenCalledTimes(3)
-    expect(log.warn.mock.calls[0]![0]).toMatchObject({ recordNumber: 2, rawFields: expect.any(Array), reasons: expect.arrayContaining(['size_sqm: required value is missing']) })
-    expect(log.warn.mock.calls[1]![0]).toMatchObject({ recordNumber: 4, reasons: ['deal_id: duplicate of an earlier valid deal'] })
-    expect(log.warn.mock.calls[2]![0].reasons).toHaveLength(2)
+    expect(log.warn.mock.calls[0]![0]).toMatchObject({ recordNumber: 2, rawFields: expect.any(Array), reasons: expect.arrayContaining(['rooms: required value is missing']) })
+    expect(log.warn.mock.calls[1]![0]).toMatchObject({ recordNumber: 4, reasons: ['deal_id: duplicate of an earlier valid deal at the same city and street'] })
+    expect(log.warn.mock.calls[2]![0].reasons).toEqual(expect.arrayContaining(['city: required value is missing', 'has_parking: unrecognized boolean']))
     expect(log.info).toHaveBeenCalledWith({ total: 5, accepted: 2, rejected: 3 }, 'Deals CSV load complete')
   })
 
@@ -83,7 +84,7 @@ describe('CSV loader', () => {
     const deals = await loadDeals(log)
     expect(deals.length).toBeGreaterThan(0)
     expect(deals.length + log.warn.mock.calls.length).toBe(530)
-    expect(new Set(deals.map((deal) => deal.deal_id)).size).toBe(deals.length)
+    expect(new Set(deals.map(dealKey)).size).toBe(deals.length)
   })
 })
 
@@ -144,8 +145,54 @@ describe('streamed in-memory batches', () => {
   it('preserves the real dataset results when boundaries split valid and rejected rows', async () => {
     const log = logger()
     const deals = await loadDeals(log, undefined, { batchSize: 17 })
-    expect(deals).toHaveLength(382)
-    expect(log.warn).toHaveBeenCalledTimes(148)
-    expect(log.info).toHaveBeenCalledWith({ total: 530, accepted: 382, rejected: 148 }, 'Deals CSV load complete')
+    expect(deals).toHaveLength(447)
+    expect(log.warn).toHaveBeenCalledTimes(83)
+    expect(log.info).toHaveBeenCalledWith({ total: 530, accepted: 447, rejected: 83 }, 'Deals CSV load complete')
   })
+})
+
+it('retains reused IDs at different cities or streets without changing row data or calling the LLM', async () => {
+  const repairTransport = vi.fn()
+  const log = logger()
+  const path = await file(csv([
+    {},
+    { city: 'ירושלים' },
+    { street: 'הנביאים' },
+    {},
+    { deal_id: 'D2' },
+  ]))
+  const deals = await loadDeals(log, path, { batchSize: 1, anthropicApiKey: 'test', repairTransport })
+  expect(deals.map(({ deal_id, city, street }) => ({ deal_id, city, street }))).toEqual([
+    { deal_id: 'D1', city: 'חיפה', street: 'הרצל' },
+    { deal_id: 'D1', city: 'ירושלים', street: 'הרצל' },
+    { deal_id: 'D1', city: 'חיפה', street: 'הנביאים' },
+    { deal_id: 'D2', city: 'חיפה', street: 'הרצל' },
+  ])
+  expect(repairTransport).not.toHaveBeenCalled()
+  expect(log.info).toHaveBeenCalledWith({ originalAccepted: 2, codeCorrected: 2, llmCorrected: 0 }, 'Deals CSV correction summary')
+  expect(log.info).toHaveBeenCalledWith({ total: 5, accepted: 4, rejected: 1 }, 'Deals CSV load complete')
+  expect(log.info.mock.calls.filter((call) => call[1] === 'CSV ID collision retained by code')).toHaveLength(2)
+  expect(log.warn.mock.calls[0]![0].recordNumber).toBe(5)
+})
+
+it('still rejects repeated ID/address combinations after trimming and validates different-address rows', async () => {
+  const log = logger()
+  const path = await file(csv([
+    {},
+    { deal_id: ' D1 ', city: ' חיפה ', street: ' הרצל ' },
+    { street: 'הנביאים', floor: '99' },
+    { street: 'הנביאים' },
+  ]))
+  const deals = await loadDeals(log, path, { batchSize: 1 })
+  expect(deals.map((deal) => deal.street)).toEqual(['הרצל', 'הנביאים'])
+  expect(log.warn.mock.calls.map((call) => call[0].recordNumber)).toEqual([3, 4])
+  expect(log.warn.mock.calls[1]![0].reasons).toContain('floor: exceeds total_floors')
+})
+
+it('uses an unambiguous composite identity even when address values contain separators', async () => {
+  const path = await file(csv([
+    { city: 'a|b', street: 'c' },
+    { city: 'a', street: 'b|c' },
+  ]))
+  expect(await loadDeals(logger(), path)).toHaveLength(2)
 })

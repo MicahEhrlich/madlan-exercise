@@ -2,56 +2,111 @@ import { setImmediate } from 'node:timers/promises'
 import type { FastifyBaseLogger } from 'fastify'
 import { defaultBatchSize, readDealBatches } from './readDealBatches.js'
 import type { Deal, DealCollection, RawDeal } from './types.js'
-import { validateDeal } from './validateDeal.js'
+import { prepareDeal } from './prepareDeal.js'
+import { dealKey } from './dealKey.js'
+import { createRepairSession } from '../repairs/repairSession.js'
+import type { RepairOptions } from '../repairs/repairSession.js'
+import { dateRepairEvidence } from '../repairs/dateEvidence.js'
+import { needsLookup } from '../repairs/lookupEvidence.js'
+import { canAttemptRepair } from '../repairs/repairEvidence.js'
 
 export const defaultCsvPath = new URL('../../../madlan_deals_sample (3) (2) (1) (1).csv', import.meta.url)
 
 type LoadLogger = Pick<FastifyBaseLogger, 'warn' | 'info'>
-export interface LoadDealsOptions {
+export interface LoadDealsOptions extends RepairOptions {
   batchSize?: number
 }
 
 export async function loadDeals(logger: LoadLogger, csvPath: string | URL = defaultCsvPath, options: LoadDealsOptions = {}): Promise<DealCollection> {
-  const deals: Readonly<Deal>[] = []
+  const entries: { recordNumber: number; deal: Readonly<Deal> }[] = []
   const seenIds = new Set<string>()
+  const seenDeals = new Set<string>()
+  // Keep identities, not raw rows: lookup candidates are streamed again only
+  // after ordinary repairs have had access to the full shared API budget.
+  const deferredLookupKeys = new Set<string>()
   let total = 0
   let rejected = 0
   let batchNumber = 0
-
-  for await (const { headers, records, firstRecordNumber } of readDealBatches(csvPath, options.batchSize ?? defaultBatchSize)) {
-    const batch: Readonly<Deal>[] = []
-    for (const [index, rawFields] of records.entries()) {
-      total++
-      const recordNumber = firstRecordNumber + index
-      const reject = (reasons: string[]) => {
-        rejected++
-        logger.warn({ recordNumber, rawFields, reasons }, 'Rejected CSV deal')
-      }
-      if (rawFields.length !== headers.length) {
-        reject([`Expected ${headers.length} fields, received ${rawFields.length}`])
-        continue
-      }
-
-      const raw = Object.fromEntries(headers.map((key, column) => [key, rawFields[column]])) as RawDeal
-      const result = validateDeal(raw)
-      const reasons = [...result.reasons]
-      if (seenIds.has(raw.deal_id.trim())) reasons.push('deal_id: duplicate of an earlier valid deal')
-      if (reasons.length || !('deal' in result)) {
-        reject(reasons)
-        continue
-      }
-      seenIds.add(result.deal.deal_id)
-      batch.push(Object.freeze(result.deal))
+  let originalAccepted = 0
+  let codeCorrected = 0
+  let llmCorrected = 0
+  const reject = (recordNumber: number, rawFields: readonly string[], reasons: string[]) => {
+    rejected++
+    logger.warn({ recordNumber, rawFields, reasons }, 'Rejected CSV deal')
+  }
+  const save = (recordNumber: number, deal: Deal) => {
+    const idCollision = seenIds.has(deal.deal_id)
+    if (idCollision) {
+      logger.info({ recordNumber, deal_id: deal.deal_id, city: deal.city, street: deal.street }, 'CSV ID collision retained by code')
     }
+    seenIds.add(deal.deal_id)
+    seenDeals.add(dealKey(deal))
+    entries.push({ recordNumber, deal: Object.freeze(deal) })
+    return idCollision
+  }
+  const repairs = createRepairSession(logger, options, (candidate, deal) => {
+    // Pending identities are resolved before processing the same ID and address again.
+    save(candidate.recordNumber, deal)
+    llmCorrected++
+    logger.info({ recordNumber: candidate.recordNumber, original: candidate.original, corrected: deal, dateDayDefaulted: dateRepairEvidence(candidate.original.deal_date)?.dayDefaulted ?? false }, 'CSV deal corrected by LLM')
+  }, (candidate, reason) => reject(candidate.recordNumber, candidate.rawFields, [...candidate.reasons, reason]))
 
-    // Save this batch before asking the streaming reader for the next one.
-    for (const deal of batch) deals.push(deal)
-    batchNumber++
-    logger.info({ batch: batchNumber, processed: records.length, accepted: batch.length, total }, 'Deals CSV batch saved')
-    await setImmediate()
+  for (let pass = 0; pass < 2; pass++) {
+    if (pass === 1 && !deferredLookupKeys.size) break
+    for await (const { headers, records, firstRecordNumber } of readDealBatches(csvPath, options.batchSize ?? defaultBatchSize)) {
+      const acceptedBefore = entries.length
+      for (const [index, rawFields] of records.entries()) {
+        if (pass === 0) total++
+        const recordNumber = firstRecordNumber + index
+        if (rawFields.length !== headers.length) {
+          if (pass === 1) continue
+          reject(recordNumber, rawFields, [`Expected ${headers.length} fields, received ${rawFields.length}`])
+          continue
+        }
+
+        const raw = Object.fromEntries(headers.map((key, column) => [key, rawFields[column]])) as RawDeal
+        const key = dealKey(raw)
+        if (pass === 1 && !deferredLookupKeys.has(key)) continue
+        if (pass === 0 && deferredLookupKeys.has(key)) continue
+        const id = raw.deal_id.trim()
+        if (repairs.hasPendingDeal(raw)) await repairs.flush()
+        const prepared = prepareDeal(raw)
+        const reasons = [...prepared.result.reasons]
+        const duplicate = seenDeals.has(dealKey(raw))
+        if (duplicate) reasons.push('deal_id: duplicate of an earlier valid deal at the same city and street')
+        if (duplicate || !id) {
+          reject(recordNumber, rawFields, reasons)
+          continue
+        }
+        if (pass === 0 && options.anthropicApiKey && needsLookup({ prepared: prepared.raw }) && canAttemptRepair(prepared.raw, true)) {
+          deferredLookupKeys.add(key)
+          continue
+        }
+        for (const correction of prepared.corrections) {
+          logger.info({ recordNumber, ...correction }, 'CSV field corrected by code')
+        }
+        if ('deal' in prepared.result) {
+          const idCollision = save(recordNumber, prepared.result.deal)
+          if (prepared.corrected || idCollision) codeCorrected++
+          else originalAccepted++
+        } else {
+          await repairs.enqueue({ recordNumber, original: raw, prepared: prepared.raw, rawFields, reasons })
+        }
+      }
+
+      if (pass === 0) {
+        batchNumber++
+        logger.info({ batch: batchNumber, processed: records.length, accepted: entries.length - acceptedBefore, total }, 'Deals CSV batch saved')
+      }
+      await setImmediate()
+    }
+    await repairs.flush()
   }
 
-  logger.info({ total, accepted: deals.length, rejected }, 'Deals CSV load complete')
-  if (!deals.length) throw new Error('Deals CSV contains no valid deals')
-  return Object.freeze(deals)
+  logger.info({ originalAccepted, codeCorrected, llmCorrected }, 'Deals CSV correction summary')
+  logger.info({ total, accepted: entries.length, rejected }, 'Deals CSV load complete')
+  if (!entries.length) throw new Error('Deals CSV contains no valid deals')
+  // Deferred repairs must not reorder the accepted CSV rows.
+  entries.sort((a, b) => a.recordNumber - b.recordNumber)
+  return Object.freeze(entries.map((entry) => entry.deal))
 }

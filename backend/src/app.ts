@@ -11,7 +11,9 @@ declare module 'fastify' {
 }
 
 export function buildApp(options: FastifyServerOptions = {}, data: LoadDealsOptions & { csvPath?: string | URL } = {}) {
-  const app = Fastify(options)
+  // Streaming a large CSV plus bounded API repairs can exceed Fastify's 10s
+  // boot timeout. Repair requests enforce their own 10s/30s deadlines.
+  const app = Fastify({ pluginTimeout: 0, ...options })
 
   app.decorate('deals', Object.freeze([]))
   app.addHook('onReady', async () => {

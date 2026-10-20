@@ -6,7 +6,7 @@ export interface Deal {
   property_type: string
   rooms: number
   size_sqm: number
-  floor: number
+  floor: number | 'unknown'
   total_floors: number
   year_built: number
   condition: string

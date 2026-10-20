@@ -1,7 +1,7 @@
 import { dealHeaders } from './types.js'
-import type { RawDeal, ValidationResult } from './types.js'
+import type { Deal, RawDeal, ValidationResult } from './types.js'
 
-export function validateDeal(raw: RawDeal): ValidationResult {
+export function inspectDeal(raw: RawDeal) {
   const fields = Object.fromEntries(dealHeaders.map((key) => [key, raw[key].trim()])) as RawDeal
   const reasons: string[] = []
 
@@ -43,7 +43,7 @@ export function validateDeal(raw: RawDeal): ValidationResult {
     return normalized
   }
 
-  const deal = {
+  const deal: Deal = {
     deal_id: fields.deal_id,
     city: fields.city,
     neighborhood: fields.neighborhood,
@@ -51,7 +51,7 @@ export function validateDeal(raw: RawDeal): ValidationResult {
     property_type: fields.property_type,
     rooms: number('rooms'),
     size_sqm: number('size_sqm'),
-    floor: number('floor', { integer: true, zero: true }),
+    floor: fields.floor === 'unknown' ? 'unknown' : number('floor', { integer: true, zero: true }),
     total_floors: number('total_floors', { integer: true, zero: true }),
     year_built: number('year_built', { integer: true }),
     condition: fields.condition,
@@ -65,11 +65,16 @@ export function validateDeal(raw: RawDeal): ValidationResult {
     source: fields.source,
   }
 
-  if (deal.floor > deal.total_floors) reasons.push('floor: exceeds total_floors')
+  if (typeof deal.floor === 'number' && deal.floor > deal.total_floors) reasons.push('floor: exceeds total_floors')
   if (deal.size_sqm > 0 && deal.price_nis > 0 && deal.price_per_sqm > 0 &&
     Math.abs(deal.price_nis / deal.size_sqm - deal.price_per_sqm) > 1) {
     reasons.push('price_per_sqm: differs from price_nis / size_sqm by more than 1 NIS/m²')
   }
 
+  return { deal, reasons }
+}
+
+export function validateDeal(raw: RawDeal): ValidationResult {
+  const { deal, reasons } = inspectDeal(raw)
   return reasons.length ? { reasons } : { deal, reasons: [] }
 }
