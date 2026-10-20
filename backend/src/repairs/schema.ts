@@ -3,7 +3,7 @@ import { dealHeaders } from '../deals/types.js'
 
 export const dealSchema = z.strictObject({
   deal_id: z.string(), city: z.string(), neighborhood: z.string(), street: z.string(), property_type: z.string(),
-  rooms: z.number(), size_sqm: z.number(), floor: z.union([z.number(), z.literal('unknown')]), total_floors: z.number(), year_built: z.number(),
+  rooms: z.number(), size_sqm: z.number(), floor: z.union([z.number(), z.literal('unknown')]), total_floors: z.number(), year_built: z.union([z.number(), z.literal('unknown')]),
   condition: z.string(), has_elevator: z.boolean(), has_parking: z.boolean(), has_balcony: z.boolean(),
   has_safe_room: z.boolean(), deal_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), price_nis: z.number(), price_per_sqm: z.number(), source: z.string(),
 })

@@ -1,12 +1,13 @@
 import type { FastifyBaseLogger } from 'fastify'
 import { createAnthropicTransport } from './anthropicTransport.js'
 import { verifyRepairReport } from './verifyRepair.js'
-import { defaultAnthropicModel, defaultLlmBatchSize, maxOutputTokens } from './types.js'
+import { defaultAnthropicModel, defaultLlmBatchSize, maxOutputTokens, formatRequestTimeoutMs, formatBudgetMs, lookupRequestTimeoutMs, lookupBudgetMs } from './types.js'
 import type { RepairCandidate, RepairReport, RepairResponse, RepairTransport } from './types.js'
 import type { Deal } from '../deals/types.js'
 import { dealKey } from '../deals/dealKey.js'
 import { canAttemptRepair } from './repairEvidence.js'
 import { needsLookup } from './lookupEvidence.js'
+import { prepareDeal } from '../deals/prepareDeal.js'
 
 export interface RepairOptions {
   anthropicApiKey?: string
@@ -24,7 +25,8 @@ export function estimateOutputTokens(candidate: RepairCandidate) {
 
 export function createRepairSession(logger: Logger, options: RepairOptions,
   accept: (candidate: RepairCandidate, deal: Deal) => void,
-  reject: (candidate: RepairCandidate, reason: string) => void) {
+  reject: (candidate: RepairCandidate, reason: string) => void,
+  acceptFallback: (candidate: RepairCandidate, deal: Deal, reason: string) => void = accept) {
   const batchSize = options.llmBatchSize ?? defaultLlmBatchSize
   if (!Number.isSafeInteger(batchSize) || batchSize <= 0) throw new Error('LLM_BATCH_SIZE must be a positive safe integer')
   const transport = options.anthropicApiKey ? options.repairTransport ?? createAnthropicTransport(options.anthropicApiKey) : undefined
@@ -32,8 +34,24 @@ export function createRepairSession(logger: Logger, options: RepairOptions,
   const outputBudget = maxOutputTokens - 256
   let pending: RepairCandidate[] = []
   let tokens = 0
-  let spentMs = 0
-  let stopped = false
+  const spent = { format: 0, lookup: 0 }
+  const kindOf = (candidate: RepairCandidate) => needsLookup(candidate) ? 'lookup' : 'format'
+  const budget = (candidate: RepairCandidate) => needsLookup(candidate) ? lookupBudgetMs : formatBudgetMs
+  const failCandidate = (candidate: RepairCandidate, reason: string) => {
+    if (needsLookup(candidate)) {
+      const raw = { ...candidate.prepared }
+      for (const field of ['year_built', 'neighborhood'] as const) {
+        if (!raw[field].trim()) raw[field] = 'unknown'
+      }
+      const result = prepareDeal(raw).result
+      if ('deal' in result) {
+        acceptFallback(candidate, result.deal, reason)
+        return
+      }
+    }
+    reject(candidate, reason)
+  }
+  const stopped = { format: false, lookup: false }
   let requests = 0
   if (!transport) logger.info({ repairEnabled: false }, 'CSV repair disabled: ANTHROPIC_API_KEY missing')
 
@@ -43,10 +61,11 @@ export function createRepairSession(logger: Logger, options: RepairOptions,
     pending = []
     tokens = 0
     const fail = (reason: string) => {
-      for (const candidate of candidates) reject(candidate, reason)
+      for (const candidate of candidates) failCandidate(candidate, reason)
     }
-    const remainingMs = 30_000 - spentMs
-    if (!transport || stopped || remainingMs <= 0) {
+    const kind = kindOf(candidates[0]!)
+    const remainingMs = budget(candidates[0]!) - spent[kind]
+    if (!transport || stopped[kind] || remainingMs <= 0) {
       fail('LLM repair unavailable or total API budget exhausted')
       return
     }
@@ -54,7 +73,7 @@ export function createRepairSession(logger: Logger, options: RepairOptions,
     requests++
     const started = performance.now()
     const controller = new AbortController()
-    const deadlineMs = Math.min(10_000, remainingMs)
+    const deadlineMs = Math.min(kind === 'lookup' ? lookupRequestTimeoutMs : formatRequestTimeoutMs, remainingMs)
     let timer: ReturnType<typeof setTimeout>
     let response: RepairResponse
     try {
@@ -71,7 +90,7 @@ export function createRepairSession(logger: Logger, options: RepairOptions,
         throw new Error('Repair deadline exceeded')
       }
     } catch (error) {
-      stopped = true
+      stopped[kind] = true
       fail('LLM request failed or timed out; further repair calls disabled')
       const status = error && typeof error === 'object' && 'status' in error && typeof error.status === 'number' ? error.status : undefined
       logger.warn({ request: requests, model, repairKind: needsLookup(candidates[0]!) ? 'lookup' : 'format',
@@ -79,10 +98,10 @@ export function createRepairSession(logger: Logger, options: RepairOptions,
       return
     } finally {
       clearTimeout(timer!)
-      spentMs += Math.max(0, performance.now() - started)
+      spent[kind] += Math.max(0, performance.now() - started)
     }
 
-    logger.info({ request: requests, model, elapsedMs: performance.now() - started, apiElapsedMs: spentMs, usage: response.usage }, 'CSV repair API usage')
+    logger.info({ request: requests, model, elapsedMs: performance.now() - started, apiElapsedMs: spent.format + spent.lookup, usage: response.usage }, 'CSV repair API usage')
     try {
       if (response.stopReason !== 'end_turn') throw new Error('Incomplete repair response')
       const report = verifyRepairReport(response.text, candidates, response.facts)
@@ -90,7 +109,7 @@ export function createRepairSession(logger: Logger, options: RepairOptions,
       for (const candidate of candidates) {
         const deal = correctedDeals.get(dealKey(candidate.original))
         if (deal) accept(candidate, deal)
-        else reject(candidate, 'LLM could not provide a verifiable repair')
+        else failCandidate(candidate, 'LLM could not provide a verifiable repair')
       }
       logger.info({ auto_corrected: report.auto_corrected, rows_failed_to_correct: report.rows_failed_to_correct, lookupSources: response.facts ?? [] }, 'CSV repair batch complete')
       return report
@@ -105,24 +124,24 @@ export function createRepairSession(logger: Logger, options: RepairOptions,
     hasPendingDeal: (deal: Pick<Deal, 'deal_id' | 'city' | 'street'>) => pending.some((candidate) => dealKey(candidate.original) === dealKey(deal)),
     async enqueue(candidate: RepairCandidate) {
       if (!canAttemptRepair(candidate.prepared, true)) {
-        reject(candidate, 'LLM repair skipped: row has errors without verifiable repairs')
+        failCandidate(candidate, 'LLM repair skipped: row has errors without verifiable repairs')
         return
       }
-      if (!transport || stopped || spentMs >= 30_000) {
-        reject(candidate, 'LLM repair unavailable or total API budget exhausted')
+      if (!transport || stopped[kindOf(candidate)] || spent[kindOf(candidate)] >= budget(candidate)) {
+        failCandidate(candidate, 'LLM repair unavailable or total API budget exhausted')
         return
       }
       const size = estimateOutputTokens(candidate)
       if (size > outputBudget) {
-        reject(candidate, 'Row exceeds LLM output budget')
+        failCandidate(candidate, 'Row exceeds LLM output budget')
         return
       }
       // A lookup uses web search and a different response schema. Never send
       // ordinary format repairs through that slower request path.
       if (tokens + size > outputBudget || (pending.length > 0 && needsLookup(pending[0]!) !== needsLookup(candidate)) || pending.some((row) => dealKey(row.original) === dealKey(candidate.original))) await flush()
       // A preceding flush may have disabled the service or exhausted the budget.
-      if (stopped || spentMs >= 30_000) {
-        reject(candidate, 'LLM repair unavailable or total API budget exhausted')
+      if (stopped[kindOf(candidate)] || spent[kindOf(candidate)] >= budget(candidate)) {
+        failCandidate(candidate, 'LLM repair unavailable or total API budget exhausted')
         return
       }
       pending.push(candidate)

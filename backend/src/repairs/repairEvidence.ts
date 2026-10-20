@@ -32,6 +32,7 @@ export function isVerifiedRepair(candidate: Pick<RepairCandidate, 'prepared'>, p
     if (!invalidFields.has(key)) {
       if (proposed[key] !== inspected.deal[key]) return false
     } else {
+      if ((key === 'year_built' || key === 'neighborhood') && !candidate.prepared[key].trim() && proposed[key] === 'unknown') continue
       const sourceFact = facts.find((fact) => fact.identity === dealKey(candidate.prepared) && fact.field === key)
       const evidence = representationEvidence(key, candidate.prepared[key]) ?? sourceFact?.value
       if (evidence !== undefined) {

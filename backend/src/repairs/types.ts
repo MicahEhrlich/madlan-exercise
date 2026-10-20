@@ -29,3 +29,7 @@ export type RepairTransport = (request: RepairRequest) => Promise<RepairResponse
 export const defaultAnthropicModel = 'claude-haiku-4-5-20251001'
 export const defaultLlmBatchSize = 5
 export const maxOutputTokens = 2048
+export const formatRequestTimeoutMs = 10_000
+export const formatBudgetMs = 30_000
+export const lookupRequestTimeoutMs = 30_000
+export const lookupBudgetMs = 120_000

@@ -7,7 +7,6 @@ import { proposed, report, response } from './repairFixtures.js'
 import type { RepairRequest } from '../src/repairs/types.js'
 import { needsLookup } from '../src/repairs/lookupEvidence.js'
 import { dateRepairEvidence } from '../src/repairs/dateEvidence.js'
-import { inspectDeal } from '../src/deals/validateDeal.js'
 
 const directories: string[] = []
 async function file(content: string) {
@@ -18,6 +17,26 @@ async function file(content: string) {
 afterEach(async () => { await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true }))) })
 const logger = () => ({ info: vi.fn(), warn: vi.fn() })
 const succeed = async ({ candidates }: RepairRequest) => response(report(candidates.map((row) => proposed(row))))
+
+it.each(['disabled', 'failed', 'invalid', 'unsupported', 'unknown'] as const)('retains missing lookup facts safely when the model is %s', async (mode) => {
+  const transport = vi.fn(async ({ candidates }: RepairRequest) => {
+    if (mode === 'failed') throw new Error('unavailable')
+    if (mode === 'invalid') return response('not json')
+    return response(report(candidates.map((row) => proposed(row, {
+      has_parking: false,
+      year_built: mode === 'unknown' ? 'unknown' : 1990,
+      neighborhood: mode === 'unknown' ? 'unknown' : 'unverified neighborhood',
+    }))))
+  })
+  const log = logger()
+  const deals = await loadDeals(log, await file(csv([{ year_built: '', neighborhood: '' }])), {
+    anthropicApiKey: mode === 'disabled' ? undefined : 'test', repairTransport: transport,
+  })
+  expect(deals).toHaveLength(1)
+  expect(deals[0]).toMatchObject({ year_built: 'unknown', neighborhood: 'unknown', city: 'חיפה', has_parking: false })
+  expect(transport).toHaveBeenCalledTimes(mode === 'disabled' ? 0 : 1)
+  expect(log.info).toHaveBeenCalledWith({ total: 1, accepted: 1, rejected: 0 }, 'Deals CSV load complete')
+})
 
 it('does not call the model for code-repaired prices or valid data', async () => {
   const transport = vi.fn(succeed)
@@ -80,9 +99,9 @@ it('keeps valid and code-corrected rows when the API is unavailable and never re
 
 it('does not reserve IDs for unrepairable rows and fails startup only when no acceptable deals remain', async () => {
   const transport = vi.fn(async ({ candidates }: RepairRequest) => response(report([], candidates.map((row) => row.original))))
-  const path = await file(csv([{ year_built: '' }, {}]))
+  const path = await file(csv([{ year_built: '', rooms: '' }, {}]))
   expect(await loadDeals(logger(), path, { anthropicApiKey: 'test', repairTransport: transport })).toHaveLength(1)
-  const invalidPath = await file(csv([{ year_built: '' }]))
+  const invalidPath = await file(csv([{ year_built: '', rooms: '' }]))
   await expect(loadDeals(logger(), invalidPath, { anthropicApiKey: 'test', repairTransport: transport })).rejects.toThrow('no valid deals')
 })
 
@@ -141,7 +160,7 @@ it('repairs reciprocal financial values and missing-value defaults entirely in c
   expect(log.info).toHaveBeenCalledWith({ originalAccepted: 0, codeCorrected: 4, llmCorrected: 0 }, 'Deals CSV correction summary')
 })
 
-it('sends complete eligible date rows in LLM batches and filters rows with any unrepairable error', async () => {
+it('normalizes abbreviated month dates in code and sends remaining eligible dates to the LLM', async () => {
   const path = await file(csv([
     { deal_id: 'date1', deal_date: 'Aug 2025' },
     { deal_id: 'bad-size', deal_date: 'Aug 2025', size_sqm: '', price_per_sqm: '' },
@@ -158,12 +177,12 @@ it('sends complete eligible date rows in LLM batches and filters rows with any u
   })))))
   const log = logger()
   const deals = await loadDeals(log, path, { batchSize: 1, llmBatchSize: 2, anthropicApiKey: 'test', repairTransport: transport })
-  expect(transport.mock.calls.map(([request]) => request.candidates.map((row) => row.original.deal_id))).toEqual([['date1', 'date2'], ['date3']])
+  expect(transport.mock.calls.map(([request]) => request.candidates.map((row) => row.original.deal_id))).toEqual([['date2', 'date3']])
   expect(transport.mock.calls.every(([request]) => request.candidates.every((row) => Object.keys(row.original).length === 19))).toBe(true)
   expect(deals.map((row) => [row.deal_id, row.deal_date])).toEqual([
     ['date1', '2025-08-01'], ['date2', '2025-09-01'], ['date3', '2025-08-15'], ['valid', '2024-02-29'],
   ])
-  expect(log.info).toHaveBeenCalledWith(expect.objectContaining({ recordNumber: 2, dateDayDefaulted: true }), 'CSV deal corrected by LLM')
+  expect(log.info).toHaveBeenCalledWith(expect.objectContaining({ recordNumber: 2, field: 'deal_date', original: 'Aug 2025', corrected: '2025-08-01', kind: 'default' }), 'CSV field corrected by code')
   expect(log.info).toHaveBeenCalledWith({ total: 8, accepted: 4, rejected: 4 }, 'Deals CSV load complete')
 })
 
@@ -179,7 +198,7 @@ it('makes zero API calls when every rejected row has an unrepairable error', asy
   expect(transport).not.toHaveBeenCalled()
 })
 
-it('attempts eligible fact lookups with full context, excludes unknown years, and skips other unrepairable errors', async () => {
+it('attempts eligible fact lookups with full context, retains unknown years, and skips other unrepairable errors', async () => {
   const path = await file(csv([
     {},
     { deal_id: 'unknown-year', year_built: '', has_safe_room: 'yes' },
@@ -203,8 +222,9 @@ it('attempts eligible fact lookups with full context, excludes unknown years, an
   expect(transport.mock.calls.flatMap(([request]) => request.candidates.map((row) => row.original.deal_id))).toEqual(['unknown-year', 'neighborhood'])
   const profile = transport.mock.calls[0]![0].candidates[0]!.prepared
   expect(profile).toMatchObject({ total_floors: '4', size_sqm: '100', rooms: '3', has_elevator: 'כן', has_parking: 'no', has_balcony: '1', has_safe_room: 'yes' })
-  expect(deals.map((row) => row.deal_id)).toEqual(['D1', 'neighborhood'])
-  expect(log.info).toHaveBeenCalledWith({ total: 4, accepted: 2, rejected: 2 }, 'Deals CSV load complete')
+  expect(deals.map((row) => row.deal_id)).toEqual(['D1', 'unknown-year', 'neighborhood'])
+  expect(deals[1]!.year_built).toBe('unknown')
+  expect(log.info).toHaveBeenCalledWith({ total: 4, accepted: 3, rejected: 1 }, 'Deals CSV load complete')
   expect(log.info).toHaveBeenCalledWith(expect.objectContaining({ lookupSources: [expect.objectContaining({ field: 'neighborhood', url: 'https://city.example/streets' })] }), 'CSV repair batch complete')
 })
 
@@ -226,10 +246,12 @@ it('finishes date repairs before a failing lookup, without mixing request types 
   const log = logger()
   const deals = await loadDeals(log, path, { anthropicApiKey: 'test', repairTransport: transport, batchSize: 1, llmBatchSize: 2 })
   expect(transport.mock.calls.map(([request]) => request.candidates.map((row) => row.original.deal_id))).toEqual([
-    ['date1', 'date2'], ['year', 'neighborhood'],
+    ['date2'], ['year', 'neighborhood'],
   ])
-  expect(deals.map((row) => row.deal_id)).toEqual(['date1', 'date2', 'D1'])
-  expect(log.info).toHaveBeenCalledWith({ total: 6, accepted: 3, rejected: 3 }, 'Deals CSV load complete')
+  expect(deals.map((row) => row.deal_id)).toEqual(['year', 'date1', 'neighborhood', 'date2', 'D1'])
+  expect(deals[0]!.year_built).toBe('unknown')
+  expect(deals[2]!.neighborhood).toBe('unknown')
+  expect(log.info).toHaveBeenCalledWith({ total: 6, accepted: 5, rejected: 1 }, 'Deals CSV load complete')
   expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ repairKind: 'lookup', timedOut: false }), 'CSV repair service unavailable; continuing import')
 })
 
@@ -244,31 +266,26 @@ it.each([true, false])('preserves first-valid identity behavior across deferred 
   const log = logger()
   const deals = await loadDeals(log, path, { anthropicApiKey: 'test', repairTransport: transport })
   expect(deals).toHaveLength(1)
-  expect(deals[0]!.year_built).toBe(success ? 1990 : 2005)
+  expect(deals[0]!.year_built).toBe(success ? 1990 : 'unknown')
   expect(log.info).toHaveBeenCalledWith({ total: 2, accepted: 1, rejected: 1 }, 'Deals CSV load complete')
 })
 
-it('retains the previous 462/68 sample outcome when 15 date repairs succeed and the new lookup service fails', async () => {
-  let corrected = 0
+it('recovers all abbreviated month dates in code even when the lookup service fails', async () => {
   const transport = vi.fn(async ({ candidates }: RepairRequest) => {
-    if (candidates.some(needsLookup)) throw new Error('lookup failed')
-    const accepted = candidates.filter(() => corrected++ < 15)
-    const failed = candidates.filter((row) => !accepted.includes(row))
-    return response(report(accepted.map((row) => proposed(row, {
-      has_parking: inspectDeal(row.prepared).deal.has_parking, deal_date: dateRepairEvidence(row.original.deal_date)!.date,
-    })), failed.map((row) => row.original)))
+    expect(candidates.every(needsLookup)).toBe(true)
+    throw new Error('lookup failed')
   })
   const log = logger()
   const deals = await loadDeals(log, undefined, { anthropicApiKey: 'test', repairTransport: transport, batchSize: 17 })
-  expect(deals).toHaveLength(462)
-  expect(log.info).toHaveBeenCalledWith({ originalAccepted: 381, codeCorrected: 66, llmCorrected: 15 }, 'Deals CSV correction summary')
-  expect(log.info).toHaveBeenCalledWith({ total: 530, accepted: 462, rejected: 68 }, 'Deals CSV load complete')
+  expect(deals).toHaveLength(510)
+  expect(log.info).toHaveBeenCalledWith({ originalAccepted: 381, codeCorrected: 129, llmCorrected: 0 }, 'Deals CSV correction summary')
+  expect(log.info).toHaveBeenCalledWith({ total: 530, accepted: 510, rejected: 20 }, 'Deals CSV load complete')
 })
 
-it('shares the 30-second budget across priority repairs and deferred lookups', async () => {
+it('gives deferred lookups their own budget after priority repairs', async () => {
   const path = await file(csv([
     { deal_id: 'year1', year_built: '' },
-    ...['date1', 'date2', 'date3'].map((deal_id) => ({ deal_id, deal_date: 'Aug 2025' })),
+    ...['date1', 'date2', 'date3'].map((deal_id) => ({ deal_id, deal_date: '2025-08' })),
     { deal_id: 'year2', year_built: '' },
   ]))
   let elapsed = 0
@@ -280,10 +297,10 @@ it('shares the 30-second budget across priority repairs and deferred lookups', a
   try {
     const log = logger()
     const deals = await loadDeals(log, path, { anthropicApiKey: 'test', repairTransport: transport, llmBatchSize: 1 })
-    expect(deals.map((row) => row.deal_id)).toEqual(['date1', 'date2', 'date3'])
-    expect(transport).toHaveBeenCalledTimes(4)
-    expect(transport.mock.calls[3]![0].signal.aborted).toBe(true)
-    expect(elapsed).toBe(30000)
-    expect(log.info).toHaveBeenCalledWith({ total: 5, accepted: 3, rejected: 2 }, 'Deals CSV load complete')
+    expect(deals.map((row) => row.deal_id)).toEqual(['year1', 'date1', 'date2', 'date3', 'year2'])
+    expect(transport).toHaveBeenCalledTimes(5)
+    expect(transport.mock.calls[3]![0].signal.aborted).toBe(false)
+    expect(elapsed).toBe(33000)
+    expect(log.info).toHaveBeenCalledWith({ total: 5, accepted: 5, rejected: 0 }, 'Deals CSV load complete')
   } finally { clock.mockRestore() }
 })

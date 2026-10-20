@@ -105,7 +105,9 @@ to persist batches locally.
   the literal `unknown`; missing `has_parking` defaults to `false` by application
   policy. Defaults are logged with `kind: "default"`, rather than treated as observed
   property facts. Nonempty malformed floor or parking values are not defaulted.
-  Other fields remain required unless a financial value can be derived below.
+  Missing construction year and neighborhood use verified lookup values when
+  available, otherwise the literal `unknown`. Other fields remain required unless
+  a financial value can be derived below.
 - Boolean amenities accept `כן/לא`, `yes/no`, `true/false`, and `1/0`.
   English values are case-insensitive.
 - Numeric values accept complete numbers and correctly grouped thousands separators.
@@ -113,14 +115,16 @@ to persist batches locally.
 - Rooms, size, and prices must be positive finite numbers. A known floor must be
   a nonnegative integer and cannot exceed the building's total floors; `unknown`
   is also accepted for the property floor. Total floors must remain a nonnegative
-  integer. Construction year must be a positive integer. No market-price limits
+  integer. Construction year must be a positive integer or `unknown`. No market-price limits
   or statistical outlier filters are applied.
 - Dates must be real, exact calendar dates in `YYYY-MM-DD`, `DD/MM/YYYY`, or
-  `DD.MM.YYYY` format and are stored as `YYYY-MM-DD`. Other supported formats are
-  eligible for LLM repair only if every other row error is also repairable. For
-  month/year values such as `Aug 2025`, the LLM must return `2025-08-01`, using the
-  explicitly configured day-01 default. Missing years/months and impossible dates
-  are not guessed. Without LLM repair, month-only values remain rejected.
+  `DD.MM.YYYY` format and are stored as `YYYY-MM-DD`. English abbreviated month/year
+  values in `MMM YYYY` format are converted in code, using day `01`: for example,
+  `Mar 2023` becomes `2023-03-01`. Month names are case-insensitive and surrounding
+  whitespace is accepted. This works without the LLM and is logged with
+  `kind: "default"` to distinguish the defaulted day from an observed date.
+  Other supported formats remain eligible for LLM repair only if every other row
+  error is also repairable. Missing years/months and impossible dates are not guessed.
 - Code uses `price_nis = price_per_sqm * size_sqm` to derive a single missing or
   invalid financial value from the other two positive finite values: multiply to
   derive total price, or divide to derive size or unit price. It never invents two
@@ -150,16 +154,15 @@ counts are logged and skipped when the parser can safely continue.
 
 ### Sample CSV verification
 
-With LLM repair disabled, the supplied file contains **530 records: 447 accepted,
-83 rejected**, with 447 unique accepted IDs. Of the accepted rows, 381 pass original
-validation and 66 are accepted after code corrections/defaults. These rules recover
-45 more rows than the previous 402/128 result. Live LLM results are not assumed or
+With LLM repair disabled, the supplied file contains **530 records: 510 accepted,
+20 rejected**, with 510 unique accepted IDs. Of the accepted rows, 381 pass original
+validation and 129 are accepted after code corrections/defaults, including explicit
+unknown lookup values. These rules recover 108 more rows than the previous 402/128 result. Live LLM results are not assumed or
 recorded as verified until responses pass the backend checks. This sample has no
 repeated IDs at differing cities or streets, so the address-aware duplicate policy
 does not change its totals.
 
-Remaining rejection reasons include missing construction year or neighborhood,
-month-only dates, insufficient financial operands, and duplicate ID/address
+Remaining rejection reasons include insufficient financial operands and duplicate ID/address
 combinations. A row can have several reasons, so reason counts should not be summed
 to obtain the number of rejected records.
 
@@ -198,8 +201,8 @@ unverifiable model claims.
 The evidence verifier currently supports explicit alternate amenity values
 `יש/אין` and field-appropriate numeric units such as `rooms`, `חדר`, `sqm`, `מ״ר`,
 `m²`, `NIS`, `ש״ח`, and `₪`. It checks these representations independently before
-accepting a model proposal. Missing construction year or neighborhood requires the
-source lookup described below; these facts cannot be guessed.
+accepting a model proposal. Recovering a missing construction year or neighborhood
+requires the source lookup described below; otherwise it remains `unknown`.
 For a supplied year and month with no day, day `01` is explicitly allowed by policy;
 it is not represented as an observed day. The model must preserve the
 application's `unknown` floor/condition and `false` parking defaults, without
@@ -227,8 +230,8 @@ Format/date repairs run first and never share a request with source lookups.
 Eligible lookup identities are deferred to a second streaming pass over the same
 read-only CSV, after the ordinary repair queue is flushed. No raw-row backlog is
 kept in memory. Later occurrences of deferred identities are processed in that
-pass too, preserving first-valid duplicate behavior. Source lookups use only the
-remaining shared API budget; a lookup failure cannot cancel already completed
+pass too, preserving first-valid duplicate behavior. Source lookups have their own
+API budget; a lookup failure cannot cancel already completed
 date repairs. Input totals and rejected records are counted once, and the final
 summary includes both passes. The ordinary batch progress logs describe the first pass.
 
@@ -244,11 +247,17 @@ The internal lookup response includes `lookup_evidence` with identity, field,
 value, source URL, exact cited quote, and scope. URLs must appear in actual search
 results and quotations must appear in the API's web-search citations. The evidence
 must match the city, street, and proposed value. Ordinary four-key repair reports
-and the accepted `Deal` shape remain unchanged.
+remain in the same response envelope. The accepted `Deal.year_built` type is
+`number | 'unknown'`; unknown neighborhoods use the string `unknown`.
 
-A lookup may return `year_built: "unknown"` (or an unknown neighborhood) in its
-internal response; code reclassifies that original row as failed and excludes it
-from `app.deals`. The accepted dataset still requires a numeric construction year.
+A lookup may return `year_built: "unknown"` or `neighborhood: "unknown"` and retain
+the row. When credentials are missing, the request times out, the budget runs out,
+the response is malformed, or no verified answer is provided, code defaults only
+the missing lookup fields to `unknown` and independently validates the remaining
+row. An unsupported model guess is discarded. Provided valid fields remain intact;
+malformed nonempty construction years are not replaced by unknown. Unknowns from
+code fallback are counted as code corrections and logged separately from verified
+model corrections. The frontend displays `unknown` as `לא ידוע`.
 All valid source fields, defaults, duplicate checks, and other validation remain
 in force. Accepted lookup sources are included in structured repair logs.
 
@@ -259,14 +268,17 @@ in force. Accepted lookup sources are included in structured repair logs.
   Readiness still waits for the completed import, and import errors still prevent
   startup. This does not disable the API deadlines below. Programmatic callers can
   explicitly override `pluginTimeout` in `buildApp` if needed.
-- Each entire request has a **10-second hard deadline**, including streaming to
+- Each format request has a **10-second hard deadline**; source lookup requests
+  have a **30-second hard deadline**, including streaming to
   completion. A first token does not restart that deadline. The request is aborted
   on timeout; incomplete JSON is never accepted.
-- All requests share a **30-second cumulative API-work budget per import**, measured
-  with a monotonic clock. The final request receives only the remaining time.
+- Format requests have a **30-second cumulative API-work budget per import**;
+  source lookups have a separate **120-second budget**, measured with a monotonic
+  clock. Each final request receives only the remaining time in its own budget.
   Local CSV parsing time is not part of this API-work budget.
 - SDK retries and extended thinking are disabled. A service error, authentication
-  failure, rate limit, or timeout disables further API calls for the import.
+  failure, rate limit, or timeout disables further calls of that request type for
+  the import. Missing lookup fields still receive the safe `unknown` fallback.
 - Invalid or truncated responses fail their group without retries; later groups
   may still run within the remaining budget.
 - Valid and code-corrected deals remain usable when Anthropic is unavailable.
@@ -277,8 +289,8 @@ Structured logs distinguish code field corrections, verified LLM corrections,
 rejected rows, API request duration/token usage, and original/code/LLM acceptance
 counts. Service failure logs include request type (`format` or `lookup`), elapsed
 time, cancellation status, and HTTP status when available, without provider
-error bodies or credentials. A sample-file regression test simulates 15 successful
-date repairs followed by a failed lookup and verifies **462 accepted / 68 rejected**;
+error bodies or credentials. A sample-file regression test simulates a failed
+lookup and verifies **510 accepted / 20 rejected** with explicit unknown values;
 actual live counts still depend on model responses and deadlines.
 Backend tests mock the SDK and transport; no paid API calls are made during
 verification. There are no new HTTP endpoints or frontend changes.

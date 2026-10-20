@@ -15,6 +15,16 @@ afterEach(async () => { await Promise.all(directories.splice(0).map((directory) 
 const logger = () => ({ warn: vi.fn(), info: vi.fn() })
 
 describe('CSV loader', () => {
+  it.each([undefined, 'test'])('loads MMM YYYY dates without a model request (API key: %s)', async (anthropicApiKey) => {
+    const repairTransport = vi.fn()
+    const log = logger()
+    const deals = await loadDeals(log, await file(csv([{ deal_date: 'Mar 2023' }])), { anthropicApiKey, repairTransport })
+    expect(deals[0]!.deal_date).toBe('2023-03-01')
+    expect(repairTransport).not.toHaveBeenCalled()
+    expect(log.warn).not.toHaveBeenCalled()
+    expect(log.info).toHaveBeenCalledWith(expect.objectContaining({ field: 'deal_date', original: 'Mar 2023', corrected: '2023-03-01', kind: 'default' }), 'CSV field corrected by code')
+  })
+
   it('handles BOM, empty lines, quoted commas, escaped quotes, and embedded newlines', async () => {
     const path = await file('\uFEFF' + csv([{ street: 'רחוב, "הדר"\nקומה א' }]) + '\n\n')
     const log = logger()
@@ -145,9 +155,9 @@ describe('streamed in-memory batches', () => {
   it('preserves the real dataset results when boundaries split valid and rejected rows', async () => {
     const log = logger()
     const deals = await loadDeals(log, undefined, { batchSize: 17 })
-    expect(deals).toHaveLength(447)
-    expect(log.warn).toHaveBeenCalledTimes(83)
-    expect(log.info).toHaveBeenCalledWith({ total: 530, accepted: 447, rejected: 83 }, 'Deals CSV load complete')
+    expect(deals).toHaveLength(510)
+    expect(log.warn).toHaveBeenCalledTimes(20)
+    expect(log.info).toHaveBeenCalledWith({ total: 530, accepted: 510, rejected: 20 }, 'Deals CSV load complete')
   })
 })
 

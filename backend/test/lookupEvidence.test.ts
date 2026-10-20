@@ -37,18 +37,35 @@ it('accepts an exact source-backed year only when the citation explicitly covers
   expect(isVerifiedRepair(row, fixed, result.facts)).toBe(true)
 })
 
-it('returns unknown years as unchanged failed rows, never as accepted data', () => {
+it('retains unknown years as explicit missing values', () => {
   const row = candidate({ year_built: '', has_safe_room: 'yes' })
   const body = { ...report(), auto_corrected: 1, auto_corrected_rows: [{ ...proposed(row), year_built: 'unknown' }], lookup_evidence: [] }
   const result = parseLookupResponse(message(body, [], []), [row])
-  expect(result.report).toEqual(report([], [row.original]))
-  expect(verifyRepairReport(JSON.stringify(result.report), [row], result.facts)).toEqual(report([], [row.original]))
+  expect(result.report).toEqual(report([proposed(row, { year_built: 'unknown' })]))
+  expect(verifyRepairReport(JSON.stringify(result.report), [row], result.facts)).toEqual(result.report)
 })
 
-it('returns unknown neighborhoods as failed rows', () => {
+it('retains unknown neighborhoods as explicit missing values', () => {
   const row = neighborhoodRow()
   const result = parseLookupResponse(message({ ...report([proposed(row, { neighborhood: 'unknown' })]), lookup_evidence: [] }), [row])
-  expect(result.report).toEqual(report([], [row.original]))
+  expect(result.report).toEqual(report([proposed(row, { neighborhood: 'unknown' })]))
+  expect(verifyRepairReport(JSON.stringify(result.report), [row], result.facts)).toEqual(result.report)
+})
+
+it('retains a sourced neighborhood alongside an unknown construction year', () => {
+  const row = candidate({ neighborhood: '', year_built: '' })
+  const fixed = proposed(row, { neighborhood: 'הדר', year_built: 'unknown' })
+  const result = parseLookupResponse(message({ ...report([fixed]), lookup_evidence: [proof()] }), [row])
+  expect(verifyRepairReport(JSON.stringify(result.report), [row], result.facts)).toEqual(report([fixed]))
+  expect(isVerifiedRepair(row, fixed)).toBe(false)
+})
+
+it('never replaces supplied facts with unknown or hides malformed construction years', () => {
+  const row = candidate()
+  expect(isVerifiedRepair(row, proposed(row, { year_built: 'unknown' }))).toBe(false)
+  expect(isVerifiedRepair(row, proposed(row, { neighborhood: 'unknown' }))).toBe(false)
+  const malformed = candidate({ year_built: 'invalid' })
+  expect(isVerifiedRepair(malformed, proposed(malformed, { year_built: 'unknown' }))).toBe(false)
 })
 
 it.each([
@@ -113,5 +130,5 @@ it('permits lookup only if all other errors remain repairable', () => {
   expect(canAttemptRepair(candidate({ neighborhood: '', year_built: '' }).prepared, true)).toBe(true)
   expect(canAttemptRepair(candidate({ year_built: '', size_sqm: '', price_per_sqm: '' }).prepared, true)).toBe(false)
   expect(canAttemptRepair(candidate({ neighborhood: '', rooms: '' }).prepared, true)).toBe(false)
-  expect(canAttemptRepair(candidate({ year_built: 'unknown' }).prepared, true)).toBe(false)
+  expect(canAttemptRepair(candidate({ year_built: 'unknown' }).prepared, true)).toBe(true)
 })

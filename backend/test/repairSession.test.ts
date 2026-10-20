@@ -92,6 +92,43 @@ it('aborts at 10 seconds even when a transport never settles', async () => {
   expect(service.accept).not.toHaveBeenCalled()
 })
 
+it('allows 30 seconds for lookup then falls back without inventing a year', async () => {
+  vi.useFakeTimers()
+  const transport = vi.fn(() => new Promise<RepairResponse>(() => {}))
+  const service = session(transport, { llmBatchSize: 1 })
+  const row = candidate({ year_built: '', has_parking: 'no' })
+  const pending = service.enqueue(row)
+  await vi.advanceTimersByTimeAsync(29999)
+  expect(service.accept).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
+  await pending
+  expect(transport.mock.calls).toHaveLength(1)
+  expect(service.accept).toHaveBeenCalledWith(row, expect.objectContaining({ year_built: 'unknown', neighborhood: 'הדר' }), expect.any(String))
+  expect(service.reject).not.toHaveBeenCalled()
+  await service.enqueue(candidate({ deal_id: 'D2', neighborhood: '', has_parking: 'no' }))
+  expect(transport).toHaveBeenCalledTimes(1)
+  expect(service.accept).toHaveBeenCalledTimes(2)
+})
+
+it('caps lookup work at 120 seconds independently of formatting', async () => {
+  let elapsed = 0
+  const clock = vi.spyOn(performance, 'now').mockImplementation(() => elapsed)
+  const transport = vi.fn(async ({ candidates }: RepairRequest) => {
+    elapsed += 25000
+    return response(report([], candidates.map((row) => row.original)))
+  })
+  try {
+    const service = session(transport, { llmBatchSize: 1 })
+    for (let index = 0; index < 6; index++) {
+      await service.enqueue(candidate({ deal_id: `D${index}`, year_built: '', has_parking: 'no' }))
+    }
+    expect(transport).toHaveBeenCalledTimes(5)
+    expect(transport.mock.calls[4]![0].signal.aborted).toBe(true)
+    expect(service.accept).toHaveBeenCalledTimes(6)
+    expect(service.reject).not.toHaveBeenCalled()
+  } finally { clock.mockRestore() }
+})
+
 it('caps total API work at 30 seconds and gives the final request only the remaining time', async () => {
   vi.useFakeTimers()
   const signals: AbortSignal[] = []

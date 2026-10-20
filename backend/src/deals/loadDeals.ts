@@ -22,7 +22,7 @@ export async function loadDeals(logger: LoadLogger, csvPath: string | URL = defa
   const seenIds = new Set<string>()
   const seenDeals = new Set<string>()
   // Keep identities, not raw rows: lookup candidates are streamed again only
-  // after ordinary repairs have had access to the full shared API budget.
+  // after ordinary repairs finish; source lookups have their own bounded budget.
   const deferredLookupKeys = new Set<string>()
   let total = 0
   let rejected = 0
@@ -49,7 +49,11 @@ export async function loadDeals(logger: LoadLogger, csvPath: string | URL = defa
     save(candidate.recordNumber, deal)
     llmCorrected++
     logger.info({ recordNumber: candidate.recordNumber, original: candidate.original, corrected: deal, dateDayDefaulted: dateRepairEvidence(candidate.original.deal_date)?.dayDefaulted ?? false }, 'CSV deal corrected by LLM')
-  }, (candidate, reason) => reject(candidate.recordNumber, candidate.rawFields, [...candidate.reasons, reason]))
+  }, (candidate, reason) => reject(candidate.recordNumber, candidate.rawFields, [...candidate.reasons, reason]), (candidate, deal, reason) => {
+    save(candidate.recordNumber, deal)
+    codeCorrected++
+    logger.info({ recordNumber: candidate.recordNumber, year_built: deal.year_built, neighborhood: deal.neighborhood, reason }, 'CSV deal retained with unknown lookup values')
+  })
 
   for (let pass = 0; pass < 2; pass++) {
     if (pass === 1 && !deferredLookupKeys.size) break

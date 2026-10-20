@@ -41,6 +41,7 @@ it('uses bounded web search with citations for source lookups and includes the c
   expect(params.system).toContain('total_floors, size_sqm, rooms, has_elevator, has_parking, has_balcony, and has_safe_room')
   expect(params.system).toContain("if not possible return 'unknown'")
   expect(JSON.parse(params.messages[0].content)[0].prepared).toEqual(row.prepared)
+  expect(stream.mock.calls[0]![1]).toMatchObject({ timeout: 30000 })
 })
 
 it('treats malformed lookup JSON as an invalid group, not a transport outage', async () => {

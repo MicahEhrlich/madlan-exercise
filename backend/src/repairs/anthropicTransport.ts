@@ -4,11 +4,11 @@ import { repairReportSchema } from './schema.js'
 import { lookupPrompt } from './lookupPrompt.js'
 import { needsLookup, parseLookupResponse } from './lookupEvidence.js'
 import { repairPrompt } from './prompt.js'
-import { maxOutputTokens } from './types.js'
+import { maxOutputTokens, formatRequestTimeoutMs, lookupRequestTimeoutMs } from './types.js'
 import type { RepairTransport } from './types.js'
 
 export function createAnthropicTransport(apiKey: string): RepairTransport {
-  const client = new Anthropic({ apiKey, maxRetries: 0, timeout: 10_000 })
+  const client = new Anthropic({ apiKey, maxRetries: 0, timeout: formatRequestTimeoutMs })
   const { type, schema } = zodOutputFormat(repairReportSchema)
   return async ({ model, candidates, signal }) => {
     const lookup = candidates.some(needsLookup)
@@ -22,7 +22,7 @@ export function createAnthropicTransport(apiKey: string): RepairTransport {
       messages: [{ role: 'user', content: JSON.stringify(candidates.map((row) => ({
         original: row.original, prepared: row.prepared, reasons: row.reasons,
       }))) }],
-    }, { signal, maxRetries: 0, timeout: 10_000 })
+    }, { signal, maxRetries: 0, timeout: lookup ? lookupRequestTimeoutMs : formatRequestTimeoutMs })
     const message = await stream.finalMessage()
     if (lookup && message.stop_reason === 'end_turn') {
       try {

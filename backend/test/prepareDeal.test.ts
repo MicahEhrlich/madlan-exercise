@@ -2,6 +2,30 @@ import { expect, it } from 'vitest'
 import { prepareDeal } from '../src/deals/prepareDeal.js'
 import { validRow } from './fixtures.js'
 
+it.each(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'])('defaults the missing day in %s YYYY without changing the input', (month) => {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const original = { ...validRow, deal_date: `${month} 2023` }
+  const expected = `2023-${String(months.indexOf(month) + 1).padStart(2, '0')}-01`
+  const prepared = prepareDeal(original)
+  expect(prepared.result).toMatchObject({ deal: { deal_date: expected }, reasons: [] })
+  expect(prepared.corrections).toEqual([{ field: 'deal_date', original: original.deal_date, corrected: expected, kind: 'default' }])
+  expect(original.deal_date).toBe(`${month} 2023`)
+})
+
+it('accepts case differences and surrounding whitespace in month/year dates', () => {
+  expect(prepareDeal({ ...validRow, deal_date: '  mAr   2023  ' }).result).toMatchObject({ deal: { deal_date: '2023-03-01' } })
+})
+
+it.each(['Foo 2023', 'Mar 0000', 'Mar', '2023', '2023-02-29', '31/04/2023', 'Mar 2023 extra'])('keeps invalid or incomplete dates rejected: %s', (deal_date) => {
+  const prepared = prepareDeal({ ...validRow, deal_date })
+  expect(prepared.corrected).toBe(false)
+  expect(prepared.result.reasons).toContain('deal_date: expected a valid exact date (YYYY-MM-DD, DD/MM/YYYY, or DD.MM.YYYY)')
+})
+
+it.each(['2023-03-17', '17/03/2023', '17.03.2023'])('preserves the supplied day in %s', (deal_date) => {
+  expect(prepareDeal({ ...validRow, deal_date })).toMatchObject({ corrected: false, result: { deal: { deal_date: '2023-03-17' } } })
+})
+
 it.each(['', '0', 'wrong', '100', '20001.1'])('derives bad or missing unit price %s without changing the input', (unit) => {
   const original = { ...validRow, price_per_sqm: unit }
   const prepared = prepareDeal(original)

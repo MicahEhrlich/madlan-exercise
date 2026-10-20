@@ -1,5 +1,6 @@
 import { inspectDeal, validateDeal } from './validateDeal.js'
 import type { RawDeal } from './types.js'
+import { dateRepairEvidence } from '../repairs/dateEvidence.js'
 
 export interface CodeCorrection {
   field: keyof RawDeal
@@ -8,7 +9,7 @@ export interface CodeCorrection {
   kind: 'derived' | 'default'
 }
 
-/** Repair only derivable financial values and explicitly configured missing-value defaults. */
+/** Repair derivable financial values and explicitly configured missing-value defaults. */
 export function prepareDeal(original: RawDeal) {
   const { deal } = inspectDeal(original)
   let raw = original
@@ -36,5 +37,9 @@ export function prepareDeal(original: RawDeal) {
   if (!original.condition.trim()) set('condition', 'unknown', 'default')
   if (!original.floor.trim()) set('floor', 'unknown', 'default')
   if (!original.has_parking.trim()) set('has_parking', 'false', 'default')
+  if (/^[a-z]{3}\s+\d{4}$/i.test(original.deal_date.trim())) {
+    const evidence = dateRepairEvidence(original.deal_date)
+    if (evidence) set('deal_date', evidence.date, 'default')
+  }
   return { raw, result: validateDeal(raw), corrected: corrections.length > 0, corrections }
 }

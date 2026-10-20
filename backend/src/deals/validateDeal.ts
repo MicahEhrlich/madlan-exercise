@@ -53,7 +53,7 @@ export function inspectDeal(raw: RawDeal) {
     size_sqm: number('size_sqm'),
     floor: fields.floor === 'unknown' ? 'unknown' : number('floor', { integer: true, zero: true }),
     total_floors: number('total_floors', { integer: true, zero: true }),
-    year_built: number('year_built', { integer: true }),
+    year_built: fields.year_built === 'unknown' ? 'unknown' : number('year_built', { integer: true }),
     condition: fields.condition,
     has_elevator: boolean('has_elevator'),
     has_parking: boolean('has_parking'),

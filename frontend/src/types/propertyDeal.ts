@@ -7,7 +7,7 @@ export interface PropertyDeal {
   size_sqm: number
   floor: number
   total_floors: number
-  year_built: number
+  year_built: number | 'unknown'
   condition: string
   has_elevator: boolean
   has_parking: boolean

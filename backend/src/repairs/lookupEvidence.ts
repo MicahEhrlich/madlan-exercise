@@ -15,7 +15,7 @@ export interface VerifiedLookupFact {
 export const lookupReportSchema = z.strictObject({
   auto_corrected: z.number().int().nonnegative(),
   rows_failed_to_correct: z.number().int().nonnegative(),
-  auto_corrected_rows: z.array(dealSchema.extend({ year_built: z.union([z.number(), z.literal('unknown')]) })),
+  auto_corrected_rows: z.array(dealSchema),
   failed_rows: z.array(rawDealSchema),
   lookup_evidence: z.array(z.strictObject({
     deal_id: z.string(), city: z.string(), street: z.string(),
@@ -69,8 +69,7 @@ export function parseLookupResponse(message: Message, candidates: readonly Repai
   for (const row of parsed.auto_corrected_rows) {
     const original = byIdentity.get(dealKey(row))
     if (!original) throw new Error('Unknown lookup result')
-    if (row.year_built === 'unknown' || row.neighborhood.trim().toLowerCase() === 'unknown') report.failed_rows.push(original.original)
-    else report.auto_corrected_rows.push({ ...row, year_built: row.year_built })
+    report.auto_corrected_rows.push(row)
   }
   report.auto_corrected = report.auto_corrected_rows.length
   report.rows_failed_to_correct = report.failed_rows.length
