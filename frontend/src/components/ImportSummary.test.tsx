@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { renderWithQuery as render } from '../../test/renderWithQuery'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import ImportSummary from './ImportSummary'
 import App from '../App'
@@ -20,7 +21,7 @@ it('keeps the summary in processing state during a long import and polls until i
   await act(async () => { await vi.advanceTimersByTimeAsync(12000) })
   expect(screen.getByRole('status').textContent).toContain('הנתונים עדיין בעיבוד')
   expect(screen.queryByRole('alert')).toBeNull()
-  await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+  await act(async () => { await vi.advanceTimersByTimeAsync(2001) })
   expect(screen.getByText('1,510 מתוך 1,530')).toBeDefined()
 })
 
@@ -31,7 +32,7 @@ it('shows global parsed and completed counts and fetches only once across rerend
   await screen.findByText('1,510 מתוך 1,530')
   expect(screen.getByText('100', { selector: 'dd' })).toBeDefined()
   expect(screen.getByText('רשומות שבהן הושלמו נתונים על ידי המערכת')).toBeDefined()
-  expect(screen.getByText(/ערכים לא ידועים בלבד/)).toBeDefined()
+  expect(screen.getByText(/רשומות שתוקנו גם עם ערכים לא ידועים נספרות כהשלמה/)).toBeDefined()
   expect(fetchMock).toHaveBeenCalledWith('/deals/summary', { signal: expect.any(AbortSignal) })
   view.rerender(<ImportSummary />)
   expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -59,7 +60,7 @@ it('times out a stalled summary and ignores a late response', async () => {
   let resolve!: (value: Response) => void
   fetchMock.mockImplementationOnce(() => new Promise((done) => { resolve = done }))
   render(<ImportSummary />)
-  await act(async () => { await vi.advanceTimersByTimeAsync(10000) })
+  await act(async () => { await vi.advanceTimersByTimeAsync(10001) })
   expect(screen.getByRole('alert')).toBeDefined()
   expect(fetchMock.mock.calls[0]![1]!.signal!.aborted).toBe(true)
   await act(async () => { resolve(ok()) })

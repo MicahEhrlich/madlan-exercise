@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { renderWithQuery as render } from '../../test/renderWithQuery'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import DealsTable from './DealsTable'
 import { mockDeals } from '../data/mockDeals'
@@ -11,7 +12,34 @@ const response = (page = 1, count = 20) => ({
 const ok = (data = response()) => new Response(JSON.stringify(data))
 
 beforeEach(() => { vi.stubGlobal('fetch', fetchMock); fetchMock.mockReset() })
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs() })
+
+it.each([undefined, 'https://api.example.com'])('keys and fetches deals using the configured API server %s', async (base) => {
+  vi.stubEnv('VITE_API_BASE_URL', base)
+  fetchMock.mockImplementation(async () => ok())
+  const { client } = render(<DealsTable />)
+  await screen.findByRole('table')
+  expect(fetchMock.mock.calls[0]![0]).toBe(`${base ?? ''}/deals?page=1&count=20`)
+  expect(client.getQueryData(['deals', base ?? '', 1, 20, ''])).toEqual(response())
+})
+
+it('cancels an obsolete page request on filter changes and prevents late results from replacing the current page', async () => {
+  let resolveOld!: (response: Response) => void
+  fetchMock.mockResolvedValueOnce(ok())
+    .mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve }))
+    .mockResolvedValueOnce(ok())
+  const { client } = render(<DealsTable />)
+  await screen.findByText('תל אביב–יפו', { selector: 'bdi' })
+  fireEvent.click(screen.getByRole('button', { name: 'העמוד הבא' }))
+  const oldSignal = fetchMock.mock.lastCall![1]!.signal!
+  fireEvent.change(screen.getByLabelText('סינון לפי עיר'), { target: { value: 'תל אביב–יפו' } })
+  await waitFor(() => expect(screen.queryByText('טוען עסקאות…')).toBeNull())
+  expect(oldSignal.aborted).toBe(true)
+  await act(async () => { resolveOld(ok(response(2))) })
+  expect(screen.queryByText('רמת גן', { selector: 'bdi' })).toBeNull()
+  expect(client.getQueryData(['deals', '', 2, 20, ''])).toBeUndefined()
+  expect(screen.getByText('עמוד 1 מתוך 2 · 21 עסקאות')).toBeDefined()
+})
 
 it('applies all pending ranges together while preserving other selected filters', async () => {
   fetchMock.mockImplementation(async () => ok())
@@ -129,7 +157,7 @@ it('shows processing and polls through a long import until results become availa
   await act(async () => { await vi.advanceTimersByTimeAsync(30000) })
   expect(screen.queryByRole('alert')).toBeNull()
   expect(screen.getByRole('status').textContent).toContain('הנתונים עדיין בעיבוד')
-  await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+  await act(async () => { await vi.advanceTimersByTimeAsync(2001) })
   expect(screen.getByText('תל אביב–יפו', { selector: 'bdi' })).toBeDefined()
   expect(screen.queryByText(/הנתונים עדיין בעיבוד/)).toBeNull()
 })
@@ -196,7 +224,7 @@ it('times out even if fetch ignores cancellation, and ignores a late success', a
   let resolve!: (value: Response) => void
   fetchMock.mockImplementationOnce(() => new Promise((done) => { resolve = done }))
   render(<DealsTable />)
-  await act(async () => { await vi.advanceTimersByTimeAsync(10000) })
+  await act(async () => { await vi.advanceTimersByTimeAsync(10001) })
   expect(screen.getByRole('alert').textContent).toContain('ארכה זמן רב מדי')
   expect(fetchMock.mock.calls[0]![1]!.signal!.aborted).toBe(true)
   await act(async () => { resolve(ok()) })
@@ -217,7 +245,7 @@ it('recovers on retry while an older timed-out request is still pending', async 
   let resolve!: (value: Response) => void
   fetchMock.mockImplementationOnce(() => new Promise((done) => { resolve = done })).mockResolvedValueOnce(ok())
   render(<DealsTable />)
-  await act(async () => { await vi.advanceTimersByTimeAsync(10000) })
+  await act(async () => { await vi.advanceTimersByTimeAsync(10001) })
   vi.useRealTimers()
   fireEvent.click(screen.getByRole('button', { name: 'ניסיון נוסף' }))
   await screen.findByText('תל אביב–יפו', { selector: 'bdi' })

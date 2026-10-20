@@ -3,7 +3,23 @@ import { fetchWhenReady } from './fetchWhenReady'
 
 const fetchMock = vi.fn<typeof fetch>()
 beforeEach(() => { vi.stubGlobal('fetch', fetchMock); fetchMock.mockReset(); vi.useFakeTimers() })
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs() })
+
+it.each(['/deals?page=1&count=20', '/deals/summary'])(
+  'uses the configured server for %s and all processing retries', async (path) => {
+    vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.com/api/')
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ status: 'processing' }), { status: 202 }))
+      .mockResolvedValueOnce(new Response('ready'))
+    const signal = new AbortController().signal
+    const result = fetchWhenReady(path, signal, vi.fn())
+    await vi.advanceTimersByTimeAsync(2000)
+    expect((await result).status).toBe(200)
+    expect(fetchMock.mock.calls).toEqual([
+      [`https://api.example.com/api${path}`, { signal }],
+      [`https://api.example.com/api${path}`, { signal }],
+    ])
+  },
+)
 
 it.each([
   [undefined, 2000], ['0', 2000], ['invalid', 2000], ['0.1', 1000], ['500', 5000], ['2', 2000],

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import App from './App'
 import DealsTableView from './components/DealsTableView'
 import { mockDeals } from './data/mockDeals'
+import ApiProvider from './components/ApiProvider'
 
 const table = <DealsTableView deals={mockDeals} total={mockDeals.length} query="" filters={{}}
   onQueryChange={() => {}} onFilterChange={() => {}} onRangeApply={() => {}} onReset={() => {}} />
@@ -21,7 +22,7 @@ describe('property deals table', () => {
   })
 
   it('describes server data and provides an accessible RTL page and table', () => {
-    const html = renderToStaticMarkup(<App />)
+    const html = renderToStaticMarkup(<ApiProvider><App /></ApiProvider>)
     expect(html).toContain('dir="rtl" lang="he"')
     expect(html).toContain('העסקאות נטענות מהשרת')
     expect(html).toContain('טוען עסקאות')

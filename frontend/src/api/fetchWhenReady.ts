@@ -1,3 +1,5 @@
+import { apiUrl } from './apiUrl'
+
 function waitForRetry(delay: number, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
     if (signal.aborted) { reject(signal.reason); return }
@@ -10,7 +12,7 @@ function waitForRetry(delay: number, signal: AbortSignal) {
 /** Processing is a normal startup state. Poll until ready, failed, or cancelled. */
 export async function fetchWhenReady(url: string, signal: AbortSignal, onProcessing: () => void): Promise<Response> {
   while (!signal.aborted) {
-    const response = await fetch(url, { signal })
+    const response = await fetch(apiUrl(url), { signal })
     if (response.status !== 202) return response
     const body: unknown = await response.json()
     if (!body || typeof body !== 'object' || !('status' in body) || body.status !== 'processing') {

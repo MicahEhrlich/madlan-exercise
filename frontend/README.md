@@ -1,5 +1,15 @@
 # React + TypeScript + Vite
 
+All frontend API requests run through TanStack Query. `ApiProvider` owns a stable
+query client; `useDeals` and `useImportSummary` use the shared `useApiQuery` hook
+for loading, errors, cancellation, and manual retry. Query keys include the API
+server address, and table keys also include pagination and canonical filters.
+Identical in-flight requests are deduplicated. The table preserves previous rows
+while loading another page or filter; summary results remain cached for the
+session. Automatic error retries and focus/reconnect refetches are disabled so
+the existing explicit retry flow stays predictable. HTTP 202 polling and its
+resettable inactivity deadline remain in the API layer under Query cancellation.
+
 The import summary above the table loads `/deals/summary` on mount and
 shows accepted rows out of all CSV records and rows with known values completed
 by the system. Counts cover the entire file and do not change with table filters,
@@ -24,9 +34,23 @@ Original cells have no repair mark.
 The interface labels this scope explicitly. Rows come from the
 API; mock deals are used only in tests.
 
+Copy `.env.example` to `.env` when setting up a checkout. `.env` is ignored by Git.
 Run the backend on `http://127.0.0.1:3000` and the frontend with `pnpm dev`.
-Vite proxies `/deals` requests to the backend. In production, route `/deals` on
-the frontend origin to the backend through your hosting reverse proxy.
+`API_PROXY_TARGET` in `.env` controls the local backend address. With an empty
+`VITE_API_BASE_URL`, Vite proxies `/deals` requests to that address during development.
+
+For deployment, set `VITE_API_BASE_URL` to the public backend address before
+running `pnpm build`, for example `VITE_API_BASE_URL=https://api.example.com`.
+Both the table and import summary use this address, including processing polls.
+A path prefix such as `https://example.com/api` or `/api` is supported.
+If the variable is empty, requests use the frontend origin; configure your
+production reverse proxy to route `/deals` to the backend. Vite's development
+proxy is not part of the production build. For separate frontend and API origins,
+the API or its gateway must allow the frontend origin through CORS.
+Vite embeds `VITE_` variables at build time, so rebuild after changing the server
+address and restart `pnpm dev` after editing `.env`. These variables are public;
+store only the public API address here, not credentials.
+
 Requests time out after 10 seconds; errors and invalid responses display a retry
 action in Hebrew. Pending requests are cancelled when navigating or unmounting.
 HTTP 202 with `status: "processing"` is a normal startup state for the table and
