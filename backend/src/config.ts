@@ -5,6 +5,7 @@ import { parseEnv } from 'node:util'
 import { defaultCsvPath } from './deals/loadDeals.js'
 import { defaultBatchSize } from './deals/readDealBatches.js'
 import { defaultAnthropicModel, defaultLlmBatchSize } from './repairs/types.js'
+import { defaultCacheTtlSeconds, validateCacheTtlSeconds } from './cache/types.js'
 
 const backendDirectory = fileURLToPath(new URL('../', import.meta.url))
 const defaultEnvPath = new URL('../.env', import.meta.url)
@@ -25,7 +26,19 @@ export function loadBackendConfig(environment: NodeJS.ProcessEnv = process.env, 
   const llmBatchSize = Number(values.LLM_BATCH_SIZE?.trim() || defaultLlmBatchSize)
   if (!Number.isSafeInteger(llmBatchSize) || llmBatchSize <= 0) throw new Error('LLM_BATCH_SIZE must be a positive safe integer')
   const csvPath = values.CSV_FILE_PATH?.trim()
+  const redisUrl = values.REDIS_URL?.trim() || undefined
+  if (redisUrl) {
+    let valid = false
+    try {
+      const url = new URL(redisUrl)
+      valid = ['redis:', 'rediss:'].includes(url.protocol) && Boolean(url.hostname)
+    } catch { /* Report a configuration error without including credentials. */ }
+    if (!valid) throw new Error('REDIS_URL must be a valid redis:// or rediss:// URL')
+  }
+  const redisCacheTtlSeconds = validateCacheTtlSeconds(Number(values.REDIS_CACHE_TTL_SECONDS?.trim() || defaultCacheTtlSeconds))
   return {
+    redisUrl,
+    redisCacheTtlSeconds,
     anthropicApiKey: values.ANTHROPIC_API_KEY?.trim() || undefined,
     batchSize,
     llmBatchSize,

@@ -39,6 +39,8 @@ BATCH_SIZE=
 CSV_FILE_PATH=
 LLM_BATCH_SIZE=
 ANTHROPIC_MODEL=
+REDIS_URL=
+REDIS_CACHE_TTL_SECONDS=
 ```
 
 - `ANTHROPIC_API_KEY`: enables Anthropic repair during import. When missing or blank,
@@ -51,10 +53,71 @@ ANTHROPIC_MODEL=
 - `LLM_BATCH_SIZE`: defaults to 5, independently of CSV `BATCH_SIZE`. Must be a
   positive safe integer. The output-token estimate can reduce the effective size.
 - `ANTHROPIC_MODEL`: defaults to `claude-haiku-4-5-20251001`.
+- `REDIS_URL`: enables response caching when set to a `redis://` or `rediss://`
+  connection URL. Missing or blank leaves caching disabled. Invalid URLs fail
+  configuration validation without exposing credentials.
+- `REDIS_CACHE_TTL_SECONDS`: expiration in seconds, default **300** (five minutes).
+  Must be a positive safe integer, even when caching is disabled.
+
+## Redis response cache
+
+`GET /deals` validates query parameters before accessing Redis. Successful results,
+including empty results and pages beyond the last result, are cached as complete
+JSON responses with all pagination fields and each row's `fixed_fields` metadata.
+HTTP 400 responses are never cached. The HTTP API and `/health` response are unchanged.
+
+Keys have the form `deals:v1:<dataset-sha256>:<canonical-query-json>`. The query
+includes every supplied, parsed filter, search, page, and count. Keys are sorted,
+defaults are included, and an empty search is omitted, so reordered parameters,
+trimmed text, equivalent numbers, and omitted/default pagination reuse entries.
+Different queries and pagination values get separate entries. The fingerprint is
+computed once from the final loaded collection, including repair metadata and row
+order. A changed import uses a different namespace; old entries expire naturally
+without flushing other Redis keys. Bump the `v1` namespace if response semantics
+change in a future release.
+
+On a hit, cached JSON is validated for response shape, pagination consistency,
+row values, and repair metadata. Invalid entries are recalculated and overwritten.
+On a miss, results are calculated from the loaded data and stored with an atomic
+Redis `SET` with expiration. Reads do not extend the entry's lifetime.
+
+Connections start in the background only after the CSV finishes loading. An
+unavailable cache never delays readiness. Connection attempts have a 500 ms socket
+timeout and reconnect with backoff from 100 ms up to 5 seconds. Offline command
+queues are disabled and the command queue is bounded. Reads and writes each have
+a 200 ms deadline with cancellation; a failed read skips the write and returns
+freshly calculated results. Redis errors are handled, and connections, reconnects,
+and pending commands are cancelled at shutdown. Cache warnings contain only the
+operation name and a generic message, not URLs, credentials, queries, or response data.
+
+For local development, start a disposable Redis server with Docker:
+
+```sh
+docker run --rm --name madlan-redis -p 127.0.0.1:6379:6379 redis:8-alpine
+```
+
+Set these values in `backend/.env` and restart the backend:
+
+```dotenv
+REDIS_URL=redis://127.0.0.1:6379
+REDIS_CACHE_TTL_SECONDS=300
+```
+
+Redis is optional for development and CI. Unit tests inject cache/client doubles
+and require no Redis server. Programmatic callers can supply `redisUrl` and
+`redisCacheTtlSeconds` in `buildApp`'s second argument, or inject a typed `cache`
+adapter for testing; an injected adapter takes precedence over `redisUrl`.
+
+An optional integration test uses an actual Redis instance, checks stored JSON,
+hits, expiration, and corrupt-entry replacement, then removes its own test key:
+
+```sh
+REDIS_TEST_URL=redis://127.0.0.1:6379 pnpm exec vitest run test/redisIntegration.test.ts
+```
 
 ## Startup CSV loading
 
-Before accepting requests, the server reads
+After the HTTP server starts, it reads in the background
 `../madlan_deals_sample (3) (2) (1) (1).csv`. The location is resolved relative to
 the loader module, so it works from any working directory in development and
 after compilation. Keep the root CSV available alongside the backend when
@@ -65,7 +128,33 @@ frozen objects. Loading happens once per server instance; updates require a
 restart. `GET /deals` exposes the collection with filtering and pagination.
 The frontend loads this endpoint with pagination. There is no database yet.
 
+During import, `GET /deals`, its alias `GET /deal`, and `GET /deals/summary`
+return HTTP **202** with `{"status":"processing","message":"הנתונים עדיין בעיבוד. נא להמתין."}`,
+`Retry-After: 2`, and `Cache-Control: no-store`. These responses never access Redis
+or expose partial data. The frontend displays a processing message and polls again
+until it receives completed data. Once loaded, the existing HTTP 200 payloads apply.
+An import failure returns HTTP **503** with `status: "error"` and a generic Hebrew
+message instead of remaining in processing. `/health` remains a liveness endpoint
+and returns `{"status":"ok"}` while the server is running, including during import.
+
+For programmatic callers, `app.ready()` waits for HTTP route registration;
+`await app.waitForDeals()` waits for the import and rejects on an import error.
+The import runs once. A failed import requires a server restart after correcting
+the source/configuration. Closing during import prevents later publication or
+starting the Redis client, without waiting for model requests to complete.
+
 ### Querying deals
+
+`GET /deals/summary` returns the completed import's global counts:
+`{ total_rows, parsed_rows, completed_rows }`. `total_rows` counts source CSV
+records, including rejected/duplicate records, excluding the header and empty
+lines. Quoted embedded newlines do not create extra records. `parsed_rows` is the
+number of accepted, saved rows. `completed_rows` counts each accepted row once
+when at least one field in `fixed_fields` has a known value. Unknown-only repairs
+are excluded from completion counts. The immutable summary is computed only
+after a successful import and is independent of filters, pagination, and Redis.
+The frontend displays these counts above the table; `/deals` keeps its existing
+paginated response format.
 
 `GET /deals` accepts optional exact-match filters: `city`, `neighborhood`,
 `street`, `property_type`, `rooms`, `size_sqm`, `floor`, `total_floors`,
@@ -127,8 +216,8 @@ Programmatic callers can use
 Each `Deals CSV batch saved` log reports the batch number, input records processed,
 deals accepted while processing that batch (including deferred repairs from earlier
 batches), and cumulative input count. Duplicate detection and
-CSV record numbering continue across batch boundaries. A failed import prevents
-startup, and the app never exposes a partially imported collection.
+CSV record numbering continue across batch boundaries. A failed import makes data
+endpoints unavailable, and the app never exposes a partially imported collection.
 
 Raw CSV parsing memory is limited to a batch plus stream/parser buffers and the
 current record. Accepted deals, their duplicate-identity index, and identities
@@ -189,7 +278,7 @@ or normalization. Rejected rows are not stored in the deal collection.
 
 A final `Deals CSV load complete` message contains `total`, `accepted`, and
 `rejected` counts. Missing/unreadable files, invalid headers, unrecoverable CSV
-syntax, and files with no valid deals prevent startup. Rows with incorrect field
+syntax, and files with no valid deals fail the background import. Rows with incorrect field
 counts are logged and skipped when the parser can safely continue.
 
 ### Sample CSV verification
@@ -303,11 +392,9 @@ in force. Accepted lookup sources are included in structured repair logs.
 
 ### Deadlines and fallback
 
-- Fastify's plugin/startup-hook timeout is disabled by default because streaming
-  the CSV and performing several bounded repairs can exceed its default 10 seconds.
-  Readiness still waits for the completed import, and import errors still prevent
-  startup. This does not disable the API deadlines below. Programmatic callers can
-  explicitly override `pluginTimeout` in `buildApp` if needed.
+- CSV loading runs independently of Fastify's startup hooks, so long imports do
+  not delay HTTP readiness. Data endpoints report processing until completion.
+  Provider deadlines below remain in force.
 - Each format request has a **10-second hard deadline**; source lookup requests
   have a **30-second hard deadline**, including streaming to
   completion. A first token does not restart that deadline. The request is aborted
@@ -322,7 +409,7 @@ in force. Accepted lookup sources are included in structured repair logs.
 - Invalid or truncated responses fail their group without retries; later groups
   may still run within the remaining budget.
 - Valid and code-corrected deals remain usable when Anthropic is unavailable.
-  Startup still fails if there are no acceptable deals, or the CSV itself cannot
+  The import fails if there are no acceptable deals, or the CSV itself cannot
   be parsed reliably. The app exposes its collection only after import completes.
 
 Structured logs distinguish code field corrections, verified LLM corrections,

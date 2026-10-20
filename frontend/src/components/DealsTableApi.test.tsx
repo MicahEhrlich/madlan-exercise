@@ -13,6 +13,34 @@ const ok = (data = response()) => new Response(JSON.stringify(data))
 beforeEach(() => { vi.stubGlobal('fetch', fetchMock); fetchMock.mockReset() })
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals() })
 
+it('shows processing and polls through a long import until results become available', async () => {
+  vi.useFakeTimers()
+  let requests = 0
+  fetchMock.mockImplementation(async () => ++requests <= 16
+    ? new Response(JSON.stringify({ status: 'processing', message: 'הנתונים עדיין בעיבוד.' }), { status: 202, headers: { 'Retry-After': '2' } })
+    : ok())
+  render(<DealsTable />)
+  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  expect(screen.getByRole('status').textContent).toContain('הנתונים עדיין בעיבוד')
+  await act(async () => { await vi.advanceTimersByTimeAsync(30000) })
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.getByRole('status').textContent).toContain('הנתונים עדיין בעיבוד')
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+  expect(screen.getByText('תל אביב–יפו', { selector: 'bdi' })).toBeDefined()
+  expect(screen.queryByText(/הנתונים עדיין בעיבוד/)).toBeNull()
+})
+
+it('shows a real import failure when processing ends with HTTP 503', async () => {
+  vi.useFakeTimers()
+  fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ status: 'processing' }), { status: 202 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'error' }), { status: 503 }))
+  render(<DealsTable />)
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+  expect(screen.getByRole('alert').textContent).toContain('לא ניתן לטעון')
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+})
+
 it('loads the default page, navigates, and resets pagination when page size changes', async () => {
   fetchMock.mockResolvedValueOnce(ok()).mockResolvedValueOnce(ok(response(2))).mockResolvedValueOnce(ok(response(1, 50)))
   render(<DealsTable />)

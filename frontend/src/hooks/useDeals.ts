@@ -6,6 +6,7 @@ import { columns } from '../data/dealColumns'
 
 export function useDeals(page: number, count: number, filters: DealFilters, query: string) {
   const [attempt, setAttempt] = useState(0)
+  const [processingKey, setProcessingKey] = useState('')
   const params = new URLSearchParams(columns.flatMap(([key]) => filters[key] ? [[key, filters[key]]] : []))
   if (query.trim()) params.set('q', query.trim())
   const filterQuery = params.toString()
@@ -15,12 +16,18 @@ export function useDeals(page: number, count: number, filters: DealFilters, quer
   useEffect(() => {
     const controller = new AbortController()
     let active = true
-    const timeout = setTimeout(() => {
+    const failTimeout = () => {
       active = false
       controller.abort()
       setResult({ key, data: null, error: 'טעינת העסקאות ארכה זמן רב מדי. נסו שוב.' })
-    }, 10000)
-    void fetchDeals(page, count, controller.signal, filterQuery).then((result) => {
+    }
+    let timeout = setTimeout(failTimeout, 10000)
+    void fetchDeals(page, count, controller.signal, filterQuery, () => {
+      if (!active) return
+      setProcessingKey(key)
+      clearTimeout(timeout)
+      timeout = setTimeout(failTimeout, 10000)
+    }).then((result) => {
       if (active) setResult({ key, data: result, error: '' })
     }).catch(() => {
       if (active) setResult({ key, data: null, error: 'לא ניתן לטעון את העסקאות. נסו שוב.' })
@@ -35,5 +42,5 @@ export function useDeals(page: number, count: number, filters: DealFilters, quer
   }, [page, count, key, filterQuery])
 
   const current = result?.key === key ? result : null
-  return { data: current ? current.data : result?.data ?? null, loading: !current, error: current?.error ?? '', retry: () => setAttempt((value) => value + 1) }
+  return { data: current ? current.data : result?.data ?? null, loading: !current, processing: !current && processingKey === key, error: current?.error ?? '', retry: () => setAttempt((value) => value + 1) }
 }

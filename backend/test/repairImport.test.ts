@@ -46,6 +46,7 @@ it('combines code and verified LLM field repairs without marking unchanged value
   const path = await file(csv([{ has_parking: 'אין', floor: '', price_per_sqm: '', deal_date: '2025-08' }]))
   const app = buildApp({}, { csvPath: path, anthropicApiKey: 'test', repairTransport: transport })
   try {
+    await app.waitForDeals()
     const result = await app.inject('/deals?row_status=fixed&count=1')
     expect(result.statusCode).toBe(200)
     const row = result.json().rows[0]
@@ -127,11 +128,12 @@ it('does not reserve IDs for unrepairable rows and fails startup only when no ac
   await expect(loadDeals(logger(), invalidPath, { anthropicApiKey: 'test', repairTransport: transport })).rejects.toThrow('no valid deals')
 })
 
-it('publishes repaired deals before serving the unchanged health endpoint', async () => {
+it('publishes repaired deals after the background import and keeps the health endpoint unchanged', async () => {
   const path = await file(csv([{ has_parking: 'יש' }]))
   const app = buildApp({}, { csvPath: path, anthropicApiKey: 'test', repairTransport: succeed })
   try {
     expect(app.deals).toHaveLength(0)
+    await app.waitForDeals()
     const result = await app.inject('/health')
     expect(result.statusCode).toBe(200)
     expect(result.json()).toEqual({ status: 'ok' })

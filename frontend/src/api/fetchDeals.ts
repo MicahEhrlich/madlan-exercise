@@ -1,5 +1,6 @@
 import type { DealsPage } from '../types/dealsPage'
 import { columns } from '../data/dealColumns'
+import { fetchWhenReady } from './fetchWhenReady'
 
 /** Reject malformed responses before they reach table formatting or pagination. */
 export function isDealsPage(value: unknown): value is DealsPage {
@@ -33,10 +34,10 @@ export function isDealsPage(value: unknown): value is DealsPage {
   })
 }
 
-export async function fetchDeals(page: number, count: number, signal: AbortSignal, filterQuery: string): Promise<DealsPage> {
+export async function fetchDeals(page: number, count: number, signal: AbortSignal, filterQuery: string, onProcessing: () => void): Promise<DealsPage> {
   const params = new URLSearchParams({ page: String(page), count: String(count) })
   new URLSearchParams(filterQuery).forEach((value, key) => params.set(key, value))
-  const response = await fetch(`/deals?${params}`, { signal })
+  const response = await fetchWhenReady(`/deals?${params}`, signal, onProcessing)
   if (!response.ok) throw new Error('לא ניתן לטעון את העסקאות מהשרת.')
   const data: unknown = await response.json()
   if (!isDealsPage(data) || data.page !== page || data.count !== count) throw new Error('התקבלו נתונים לא תקינים מהשרת.')

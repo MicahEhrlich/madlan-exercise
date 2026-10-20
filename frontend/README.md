@@ -1,5 +1,12 @@
 # React + TypeScript + Vite
 
+The import summary above the table loads `/deals/summary` on mount and
+shows accepted rows out of all CSV records and rows with known values completed
+by the system. Counts cover the entire file and do not change with table filters,
+search, or pagination. Unknown-only repairs are excluded from completions. Summary
+loading, errors, and retry are independent of table requests; a summary failure
+does not block the table or substitute estimated counts.
+
 The deals table loads `GET /deals?page=1&count=20` on mount, using the backend's
 default pagination values. It supports page navigation and page sizes of 20, 50,
 or 100 rows. Column filters are sent to the backend before pagination and persist
@@ -22,6 +29,12 @@ Vite proxies `/deals` requests to the backend. In production, route `/deals` on
 the frontend origin to the backend through your hosting reverse proxy.
 Requests time out after 10 seconds; errors and invalid responses display a retry
 action in Hebrew. Pending requests are cancelled when navigating or unmounting.
+HTTP 202 with `status: "processing"` is a normal startup state for the table and
+summary. Both show `הנתונים עדיין בעיבוד. נא להמתין…` and poll using `Retry-After`
+(default 2 seconds, bounded to 1–5 seconds). Each processing response resets the
+request deadline so a healthy long import is not reported as an error. A failed
+request, invalid response, or HTTP 503 still shows the retry action. Poll timers
+and requests are cancelled on unmount or when query parameters change.
 
 Verification: `pnpm test:coverage`, `pnpm build`, and `pnpm lint`.
 

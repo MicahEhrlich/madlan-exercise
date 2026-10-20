@@ -35,4 +35,14 @@ export interface SavedDeal extends Deal {
 }
 
 export type DealCollection = readonly Readonly<SavedDeal>[]
+export interface DealImportSummary {
+  total_rows: number
+  parsed_rows: number
+  completed_rows: number
+}
+
+export interface DealImport {
+  deals: DealCollection
+  summary: Readonly<DealImportSummary>
+}
 export type ValidationResult = { deal: Deal; reasons: [] } | { reasons: string[] }

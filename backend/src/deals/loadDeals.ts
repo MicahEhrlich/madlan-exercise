@@ -1,7 +1,7 @@
 import { setImmediate } from 'node:timers/promises'
 import type { FastifyBaseLogger } from 'fastify'
 import { defaultBatchSize, readDealBatches } from './readDealBatches.js'
-import type { Deal, DealCollection, RawDeal, SavedDeal } from './types.js'
+import type { Deal, DealCollection, DealImport, RawDeal, SavedDeal } from './types.js'
 import { prepareDeal } from './prepareDeal.js'
 import { fixedFields } from './fixedFields.js'
 import { dealKey } from './dealKey.js'
@@ -19,6 +19,10 @@ export interface LoadDealsOptions extends RepairOptions {
 }
 
 export async function loadDeals(logger: LoadLogger, csvPath: string | URL = defaultCsvPath, options: LoadDealsOptions = {}): Promise<DealCollection> {
+  return (await loadDealsWithSummary(logger, csvPath, options)).deals
+}
+
+export async function loadDealsWithSummary(logger: LoadLogger, csvPath: string | URL = defaultCsvPath, options: LoadDealsOptions = {}): Promise<DealImport> {
   const entries: { recordNumber: number; deal: Readonly<SavedDeal> }[] = []
   const seenIds = new Set<string>()
   const seenDeals = new Set<string>()
@@ -115,5 +119,11 @@ export async function loadDeals(logger: LoadLogger, csvPath: string | URL = defa
   if (!entries.length) throw new Error('Deals CSV contains no valid deals')
   // Deferred repairs must not reorder the accepted CSV rows.
   entries.sort((a, b) => a.recordNumber - b.recordNumber)
-  return Object.freeze(entries.map((entry) => entry.deal))
+  const deals = Object.freeze(entries.map((entry) => entry.deal))
+  const summary = Object.freeze({
+    total_rows: total,
+    parsed_rows: deals.length,
+    completed_rows: deals.filter((deal) => deal.fixed_fields.some((field) => deal[field] !== 'unknown')).length,
+  })
+  return { deals, summary }
 }

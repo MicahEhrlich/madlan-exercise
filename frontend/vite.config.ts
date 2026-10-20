@@ -6,6 +6,6 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    proxy: { '/deals': 'http://127.0.0.1:3000' },
+    proxy: { '/deals': 'http://127.0.0.1:3000', '/deal': 'http://127.0.0.1:3000' },
   },
 })

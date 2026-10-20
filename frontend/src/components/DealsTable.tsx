@@ -18,7 +18,7 @@ export default function DealsTable() {
     }, 500)
     return () => clearTimeout(timeout)
   }, [query, appliedQuery])
-  const { data, loading, error, retry } = useDeals(page, count, filters, appliedQuery)
+  const { data, loading, processing, error, retry } = useDeals(page, count, filters, appliedQuery)
   const changeFilter = (key: keyof PropertyDealValues, value: string) => {
     setFilters((current) => ({ ...current, [key]: value }))
     setPage(1)
@@ -27,7 +27,7 @@ export default function DealsTable() {
 
   return (
     <div aria-busy={loading} className="space-y-4">
-      {loading && <p role="status">טוען עסקאות…</p>}
+      {loading && <p role="status">{processing ? 'הנתונים עדיין בעיבוד. נא להמתין…' : 'טוען עסקאות…'}</p>}
       {error && <div role="alert" className="rounded-lg bg-red-50 p-4 text-red-800 dark:bg-red-950 dark:text-red-200">
         <p>{error}</p>
         <button type="button" onClick={retry} className={buttonClass}>ניסיון נוסף</button>

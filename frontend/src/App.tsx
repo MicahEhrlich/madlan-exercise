@@ -1,5 +1,6 @@
 import ThemeToggle from './components/ThemeToggle'
 import DealsTable from './components/DealsTable'
+import ImportSummary from './components/ImportSummary'
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
           </p>
         </header>
 
+        <ImportSummary />
         <DealsTable />
       </div>
     </main>

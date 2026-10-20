@@ -17,7 +17,7 @@ beforeAll(async () => {
   directory = input.directory
   // Use the same startup import as production, without network/model calls.
   server = buildApp({}, { csvPath: input.path })
-  await server.ready()
+  await server.waitForDeals()
 })
 
 afterAll(async () => {
@@ -53,6 +53,7 @@ describe('GET /deals', () => {
     ]))
     const filteredApp = buildApp({}, { csvPath: input.path })
     try {
+      await filteredApp.waitForDeals()
       const response = await filteredApp.inject('/deals?row_status=fixed&floor=unknown&count=1&page=2')
       expect(response.statusCode).toBe(200)
       expect(response.json()).toMatchObject({ page: 2, count: 1, total: 2, total_pages: 2, rows: [{ deal_id: 'D3', floor: 'unknown', row_status: 'fixed' }] })
