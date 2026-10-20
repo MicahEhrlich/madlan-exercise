@@ -168,6 +168,59 @@ starting the Redis client, without waiting for model requests to complete.
 
 ### Querying deals
 
+Every `/deals` and `/deal` response includes `filtered_summary` alongside the
+existing pagination fields:
+
+```json
+{
+  "average_price_per_sqm": 41200,
+  "city_comparison": {
+    "city": "חיפה",
+    "average_price_per_sqm": 43829.78723404255,
+    "difference_pct": -6
+  }
+}
+```
+
+These illustrative values describe the summary object, not actual sample results.
+The filtered mean is the arithmetic mean of accepted, repaired `price_per_sqm`
+values across **all matching rows before pagination**. It is not size-weighted.
+When matches belong to exactly one city, its baseline is the arithmetic mean of
+all accepted rows in that city, without the active filters; it includes the
+matching rows and all property types. The signed percentage is
+`(filtered_mean / city_mean - 1) * 100`, rounded to one decimal. Negative means
+below the city dataset average. No minimum sample size or market valuation is
+implied by this descriptive counter.
+
+Multiple-city results have `city_comparison: null`. Empty results have both
+summary fields null. Pagination, including an empty page beyond the last page,
+does not change the summary. Search, presets, ranges, and all other filters do.
+The response remains cached as a unit with its summary; cache keys use `deals:v2`
+so older entries without summaries are bypassed. Cache validation checks summary
+shape, finite positive means, percentage consistency, and result-count consistency.
+The global import summary endpoint is unchanged. No extra LLM calls are made.
+
+Investment presets use two additional optional `/deals` (and `/deal`) filters:
+
+- `year_built_min`: positive integer, inclusive; rows with an unknown year do not match.
+- `below_neighborhood_average`: exactly `true` or `false`. When true, return only
+  rows strictly below the average price per sqm for the same city, neighborhood,
+  and property type in the full accepted dataset. Require at least three other
+  comparable rows (four including the target); unknown/blank neighborhoods never
+  match. Equal-to-average rows are excluded. There is no city fallback, time
+  adjustment, or external market inference. False leaves this predicate inactive.
+
+Benchmarks use repaired, accepted values before any search, user filter, or
+pagination. An inclusive group mean has the same strict-below predicate as the
+mean of the other group members. An incremental mean avoids overflow and keeps
+identical-price groups from acquiring rounding-induced discounts. Discounted row
+identities are computed once per loaded dataset and supplied to cached-page
+validation, so a page is never used as its own comparison population.
+The new predicates combine with all existing filters and are included in cache
+keys. The full-package preset uses the existing `has_parking=true`,
+`has_safe_room=true`, and `has_elevator=true` filters. No model calls or source
+CSV modifications are involved.
+
 Each saved row includes a unique `row_id` (`row-<logical CSV record number>`),
 independent of repeated deal IDs, filtering, pagination, and deferred repairs.
 Excluded rows leave gaps; IDs remain stable while the source file is unchanged.

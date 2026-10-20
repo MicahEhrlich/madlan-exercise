@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useDeals } from '../hooks/useDeals'
 import DealsTableView from './DealsTableView'
 import type { DealFilters, FilterKey } from '../utils/filterDeals'
+import { toggleInvestmentPreset } from '../utils/investmentPresets'
 
 export default function DealsTable() {
   const [page, setPage] = useState(1)
@@ -19,7 +20,11 @@ export default function DealsTable() {
   }, [query, appliedQuery])
   const { data, loading, processing, error, retry } = useDeals(page, count, filters, appliedQuery)
   const changeFilter = (key: FilterKey, value: string) => {
-    setFilters((current) => ({ ...current, [key]: value }))
+    setFilters((current) => {
+      const next = { ...current, [key]: value }
+      if (key === 'year_built') delete next.year_built_min
+      return next
+    })
     setPage(1)
   }
   const buttonClass = 'rounded-lg border border-slate-300 px-4 py-2 text-sm disabled:opacity-40 dark:border-slate-600'
@@ -33,7 +38,13 @@ export default function DealsTable() {
       </div>}
       {!error && data && <>
         <DealsTableView deals={data.rows} total={data.total} filters={filters} query={query} viewKey={JSON.stringify([page, count, appliedQuery])}
+          summary={data.filtered_summary} summaryLoading={loading}
           onQueryChange={setQuery} onFilterChange={changeFilter}
+          onPresetToggle={(id) => {
+            setFilters((current) => toggleInvestmentPreset(current, id))
+            setAppliedQuery(query)
+            setPage(1)
+          }}
           onRangeApply={(ranges) => {
             setFilters((current) => ({ ...current, ...ranges }))
             setAppliedQuery(query)

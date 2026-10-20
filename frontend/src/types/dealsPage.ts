@@ -1,4 +1,5 @@
 import type { PropertyDeal } from './propertyDeal'
+import type { FilteredSummary } from './filteredSummary'
 
 export interface DealsPage {
   page: number
@@ -6,4 +7,6 @@ export interface DealsPage {
   total: number
   total_pages: number
   rows: PropertyDeal[]
+  /** Optional for compatibility with servers predating filtered summaries. */
+  filtered_summary?: FilteredSummary
 }

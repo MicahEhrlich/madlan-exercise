@@ -14,7 +14,7 @@ const analysis = { valuation_assessment: 'Undervalued', estimated_discount_premi
 const fetchMock = vi.fn<typeof fetch>()
 const ok = (data: unknown = analysis) => new Response(JSON.stringify(data))
 const tableProps = { deals: mockDeals, total: 4, query: '', filters: {}, onQueryChange: vi.fn(),
-  onFilterChange: vi.fn(), onRangeApply: vi.fn(), onReset: vi.fn() }
+  onFilterChange: vi.fn(), onRangeApply: vi.fn(), onReset: vi.fn(), onPresetToggle: vi.fn() }
 const toggle = (id = 'row-2') => screen.getByRole('button', { name: `פתיחת פרטי העסקה ${id}` })
 const panel = () => screen.getByRole('region', { name: 'פרטי העסקה' })
 beforeEach(() => {

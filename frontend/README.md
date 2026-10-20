@@ -1,5 +1,31 @@
 # React + TypeScript + Vite
 
+A compact filtered-results badge appears below search and above the table. It
+shows the total matching count and mean price per sqm from `/deals.filtered_summary`,
+covering all matching pages. A single-city result also shows the signed percentage
+relative to all accepted deals in that city; multiple-city results are labeled
+without inventing one city baseline. Empty results explain that no mean can be
+calculated. Amounts are rounded to whole shekels and differences to one decimal.
+While a request is updating, the badge hides stale figures and announces
+`מעדכן סיכום תוצאות…`. Older responses without summary metadata show an unavailable
+average rather than estimating it from the current page. This uses the existing
+TanStack Query request, caching, error, and cancellation lifecycle.
+
+Three investment filter chips appear directly above search: below neighborhood
+average, construction year 2020+, and parking + safe room + elevator. Chips combine
+with existing search, ranges, and column filters, reset pagination to page 1, and
+toggle off on a second click. The full-package chip updates all three amenity
+filters in one request; manual dropdown changes update its active state. The
+build-year chip replaces an exact-year choice; choosing an exact year manually
+clears its minimum-year filter. Clearing search and filters resets all chips.
+
+The neighborhood chip uses `below_neighborhood_average=true`; the new-build chip
+uses `year_built_min=2020`. These are server filters over all accepted rows, before
+pagination, rather than estimates from the visible page or LLM assessments.
+Neighborhood comparisons require the same city, neighborhood, and property type,
+with at least three other deals; unknown neighborhoods are excluded. The visible
+chip description explains this dataset-based price-per-sqm comparison.
+
 Each API row carries a validated `row_id` used as its React key. This metadata is
 separate from display columns, filters, and repaired fields. It identifies the
 saved CSV record for `GET /deals/:row_id/analysis`.

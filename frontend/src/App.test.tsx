@@ -6,7 +6,7 @@ import { mockDeals } from './data/mockDeals'
 import ApiProvider from './components/ApiProvider'
 
 const table = <DealsTableView deals={mockDeals} total={mockDeals.length} query="" filters={{}}
-  onQueryChange={() => {}} onFilterChange={() => {}} onRangeApply={() => {}} onReset={() => {}} />
+  onQueryChange={() => {}} onFilterChange={() => {}} onRangeApply={() => {}} onReset={() => {}} onPresetToggle={() => {}} />
 
 describe('property deals table', () => {
   it('renders all 19 column headers and four complete records', () => {

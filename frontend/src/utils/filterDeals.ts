@@ -4,7 +4,7 @@ import { formatValue } from './formatValue'
 
 export const rangeFields = ['size_sqm', 'price_nis', 'price_per_sqm'] as const
 export type RangeField = typeof rangeFields[number]
-export type FilterKey = keyof PropertyDealValues | `${RangeField}_${'min' | 'max'}`
+export type FilterKey = keyof PropertyDealValues | `${RangeField}_${'min' | 'max'}` | 'year_built_min' | 'below_neighborhood_average'
 export type DealFilters = Partial<Record<FilterKey, string>>
 
 export function hasInvalidRanges(filters: DealFilters): boolean {

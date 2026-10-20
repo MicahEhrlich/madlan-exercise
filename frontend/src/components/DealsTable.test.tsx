@@ -7,6 +7,7 @@ import DealsTableView from './DealsTableView'
 import { filterDeals } from '../utils/filterDeals'
 import type { DealFilters } from '../utils/filterDeals'
 import type { PropertyDeal } from '../types/propertyDeal'
+import { toggleInvestmentPreset } from '../utils/investmentPresets'
 
 // Exercise the controlled view with a parent that supplies filtered results.
 function DealsTable({ deals }: { deals: PropertyDeal[] }) {
@@ -15,6 +16,7 @@ function DealsTable({ deals }: { deals: PropertyDeal[] }) {
   return <DealsTableView deals={filterDeals(deals, query, filters)} total={deals.length} filters={filters} query={query}
     onQueryChange={setQuery} onFilterChange={(key, value) => setFilters((current) => ({ ...current, [key]: value }))}
     onRangeApply={(ranges) => setFilters((current) => ({ ...current, ...ranges }))}
+    onPresetToggle={(id) => setFilters((current) => toggleInvestmentPreset(current, id))}
     onReset={() => { setQuery(''); setFilters({}) }} />
 }
 
@@ -181,7 +183,7 @@ describe('table search and filters', () => {
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: '  ביאליק  ' } })
     expect(displayedRows()).toHaveLength(1)
     expect(displayedRows()[0]!.textContent).toContain('רמת גן')
-    expect(screen.getByRole('status').textContent).toBe('1 מתוך 4 עסקאות')
+    expect(screen.getByRole('status', { name: 'מספר עסקאות בעמוד' }).textContent).toBe('1 מתוך 4 עסקאות')
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: '4,000,000' } })
     expect(displayedRows()[0]!.textContent).toContain('תל אביב–יפו')
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: '4000000' } })
@@ -220,7 +222,7 @@ describe('table search and filters', () => {
 
   it('handles an empty dataset', () => {
     render(<DealsTable deals={[]} />)
-    expect(screen.getByRole('status').textContent).toBe('0 מתוך 0 עסקאות')
+    expect(screen.getByRole('status', { name: 'מספר עסקאות בעמוד' }).textContent).toBe('0 מתוך 0 עסקאות')
     expect(screen.getByText('לא נמצאו עסקאות התואמות לחיפוש ולמסננים.')).toBeDefined()
   })
 

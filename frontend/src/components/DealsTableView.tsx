@@ -9,6 +9,10 @@ import SearchBar from './SearchBar'
 import DealRow from './DealRow'
 import RangeFilter from './RangeFilter'
 import { useExpandedDeal } from '../hooks/useExpandedDeal'
+import PresetFilterChips from './PresetFilterChips'
+import type { InvestmentPresetId } from '../data/investmentPresets'
+import FilteredResultsSummary from './FilteredResultsSummary'
+import type { FilteredSummary } from '../types/filteredSummary'
 
 interface DealsTableViewProps {
   deals: PropertyDeal[]
@@ -19,10 +23,13 @@ interface DealsTableViewProps {
   onFilterChange: (key: FilterKey, value: string) => void
   onRangeApply: (ranges: DealFilters) => void
   onReset: () => void
+  onPresetToggle: (id: InvestmentPresetId) => void
   viewKey?: string
+  summary?: FilteredSummary
+  summaryLoading?: boolean
 }
 
-export default function DealsTableView({ deals, total, query, filters, onQueryChange, onFilterChange, onRangeApply, onReset, viewKey }: DealsTableViewProps) {
+export default function DealsTableView({ deals, total, query, filters, onQueryChange, onFilterChange, onRangeApply, onReset, onPresetToggle, viewKey, summary, summaryLoading = false }: DealsTableViewProps) {
   const [rangeDrafts, setRangeDrafts] = useState<DealFilters>({})
   const [openRange, setOpenRange] = useState<RangeField | null>(null)
   const selectedRanges = { ...filters, ...rangeDrafts }
@@ -32,9 +39,11 @@ export default function DealsTableView({ deals, total, query, filters, onQueryCh
     <section aria-labelledby="table-title" className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
       <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 px-6 py-5">
         <h2 id="table-title" className="font-semibold">עסקאות בעמוד הנוכחי</h2>
-        <span role="status" className="rounded-full bg-teal-50 dark:bg-teal-950 px-3 py-1 text-sm font-medium text-teal-800 dark:text-teal-300">{deals.length} מתוך {total} עסקאות</span>
+        <span role="status" aria-label="מספר עסקאות בעמוד" className="rounded-full bg-teal-50 dark:bg-teal-950 px-3 py-1 text-sm font-medium text-teal-800 dark:text-teal-300">{deals.length} מתוך {total} עסקאות</span>
       </div>
+      <PresetFilterChips filters={filters} onToggle={onPresetToggle} />
       <SearchBar value={query} onChange={onQueryChange} onReset={() => { setRangeDrafts({}); setOpenRange(null); onReset() }} />
+      <FilteredResultsSummary total={total} summary={summary} loading={summaryLoading} />
       <p id="table-scroll-hint" className="border-b border-slate-100 dark:border-slate-800 px-6 py-3 text-xs text-slate-500 dark:text-slate-400">ניתן לגלול אופקית לצפייה בכל העמודות. לחצו על עסקה לצפייה בפרטים ובניתוח.</p>
       {/* Mirror the scroller vertically to place its native scrollbar at the top; mirror the table back to keep its contents upright. */}
       <div role="region" aria-label="טבלת עסקאות לגלילה אופקית" aria-describedby="table-scroll-hint" tabIndex={0} className="@container -scale-y-100 overflow-x-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-teal-600">
