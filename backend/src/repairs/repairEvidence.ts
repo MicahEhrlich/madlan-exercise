@@ -33,7 +33,7 @@ export function isVerifiedRepair(candidate: Pick<RepairCandidate, 'prepared'>, p
       if (proposed[key] !== inspected.deal[key]) return false
     } else {
       if ((key === 'year_built' || key === 'neighborhood') && !candidate.prepared[key].trim() && proposed[key] === 'unknown') continue
-      const sourceFact = facts.find((fact) => fact.identity === dealKey(candidate.prepared) && fact.field === key)
+      const sourceFact = facts.find((fact) => fact.identity === dealKey(candidate.prepared) && fact.source === candidate.prepared.source.trim() && fact.field === key)
       const evidence = representationEvidence(key, candidate.prepared[key]) ?? sourceFact?.value
       if (evidence !== undefined) {
         if (proposed[key] !== evidence) return false
@@ -66,7 +66,7 @@ export function canAttemptRepair(prepared: RawDeal, allowLookup = false): boolea
       // Preflight only: placeholders are never persisted or sent as facts.
       const value = field === 'year_built' ? 2000 : '__source_lookup__'
       suggested[field] = String(value)
-      lookupPlaceholders.push({ identity: dealKey(prepared), field, value, url: '', quote: '' })
+      lookupPlaceholders.push({ identity: dealKey(prepared), source: prepared.source.trim(), field, value, url: '', quote: '' })
     }
   }
   // A single remaining financial error may become derivable after a format repair.

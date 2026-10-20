@@ -345,7 +345,20 @@ Lookup prompts include the entire original/prepared row, specifically city,
 street, `total_floors`, `size_sqm`, `rooms`, `has_elevator`, `has_parking`,
 `has_balcony`, and `has_safe_room`. These features guide the search but do not
 independently establish an exact year. A safe room, for example, can be added to
-an older building. The supplied missing-year prompt is preserved in `lookupPrompt.ts`.
+an older building. The lookup prompt in `lookupPrompt.ts` requires web search
+before returning `unknown` for an unresolved missing year or neighborhood. Missing
+years use city, street, construction-year terms, and the property context; missing
+neighborhoods require a city/street neighborhood search, preferably using municipal
+maps or records. When both fields are missing, both must be investigated; failing
+to recover one does not skip the other. `unknown` is returned only when the search
+does not produce usable, unambiguous evidence for that field. The code-level
+fallback for unavailable services or exhausted deadlines still applies.
+
+The row's `source` value also guides searches for both missing facts. For example,
+`רשות המיסים` / `רשות המסים` directs the model to search the named authority's
+records together with the city and street before trying other authoritative
+sources. The provider label is a search hint, not evidence by itself. The saved
+row's original source is preserved even if another provider supplies the proof.
 
 Only batches containing a missing year or neighborhood enable Anthropic's
 `web_search_20250305` server tool, capped at **two searches per request**. Ordinary
@@ -372,10 +385,13 @@ that street were built in that exact year. Approximate eras, feature-based guess
 negated statements, unsupported quotations/URLs, and conflicting answers are not
 accepted. Consequently, many year lookups may correctly remain `unknown`.
 
-The internal lookup response includes `lookup_evidence` with identity, field,
+The internal lookup response includes `lookup_evidence` with identity, `source`, field,
 value, source URL, exact cited quote, and scope. URLs must appear in actual search
 results and quotations must appear in the API's web-search citations. The evidence
-must match the city, street, and proposed value. Ordinary four-key repair reports
+must match the city, street, and proposed value. Each evidence item's `source`
+must match the submitted row's source after trimming; this provider label is
+retained in verified facts and repair logs. `source_url` remains the retrieved
+supporting webpage and may belong to another provider. Ordinary four-key repair reports
 remain in the same response envelope. The accepted `Deal.year_built` type is
 `number | 'unknown'`; unknown neighborhoods use the string `unknown`.
 

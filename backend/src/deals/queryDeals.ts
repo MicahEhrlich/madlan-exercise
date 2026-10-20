@@ -17,6 +17,8 @@ export const dealsQuerySchema = z.strictObject({
   property_type: text.optional(),
   rooms: positive.optional(),
   size_sqm: positive.optional(),
+  size_sqm_min: numeric.optional(),
+  size_sqm_max: numeric.optional(),
   floor: z.union([z.literal('unknown'), integer]).optional(),
   total_floors: integer.optional(),
   year_built: z.union([z.literal('unknown'), integer.pipe(z.number().positive())]).optional(),
@@ -27,7 +29,11 @@ export const dealsQuerySchema = z.strictObject({
   has_safe_room: boolean.optional(),
   deal_date: z.iso.date().optional(),
   price_nis: positive.optional(),
+  price_nis_min: numeric.optional(),
+  price_nis_max: numeric.optional(),
   price_per_sqm: positive.optional(),
+  price_per_sqm_min: numeric.optional(),
+  price_per_sqm_max: numeric.optional(),
   source: text.optional(),
   row_status: z.enum(['original', 'fixed']).optional(),
   q: z.string().trim().optional(),
@@ -38,9 +44,17 @@ export const dealsQuerySchema = z.strictObject({
 export type DealsQuery = z.infer<typeof dealsQuerySchema>
 
 export function queryDeals(deals: DealCollection, query: DealsQuery) {
-  const { page, count, q = '', ...filters } = query
+  const { page, count, q = '', size_sqm_min, size_sqm_max, price_nis_min, price_nis_max,
+    price_per_sqm_min, price_per_sqm_max, ...filters } = query
+  const ranges = [
+    ['size_sqm', size_sqm_min, size_sqm_max],
+    ['price_nis', price_nis_min, price_nis_max],
+    ['price_per_sqm', price_per_sqm_min, price_per_sqm_max],
+  ] as const
   const matches = deals.filter((deal) =>
-    Object.entries(filters).every(([key, value]) => deal[key as keyof typeof filters] === value) && matchesDealSearch(deal, q),
+    Object.entries(filters).every(([key, value]) => deal[key as keyof typeof filters] === value) &&
+    ranges.every(([key, min, max]) => (min === undefined || deal[key] >= min) && (max === undefined || deal[key] <= max)) &&
+    matchesDealSearch(deal, q),
   )
   const offset = (page - 1) * count
   return {

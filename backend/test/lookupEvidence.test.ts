@@ -10,7 +10,7 @@ const quote = 'בחיפה ברחוב הרצל כל הרחוב נמצא בשכו�
 const yearQuote = 'חיפה הרצל: all buildings were built in 1990.'
 const neighborhoodRow = () => candidate({ neighborhood: '' })
 function proof(field = 'neighborhood', value: string | number = 'הדר', excerpt = quote) {
-  return { deal_id: 'D1', city: 'חיפה', street: 'הרצל', field, value, source_url: url, quote: excerpt, scope: 'entire_street' }
+  return { deal_id: 'D1', city: 'חיפה', street: 'הרצל', source: 'רשות המסים', field, value, source_url: url, quote: excerpt, scope: 'entire_street' }
 }
 function message(value: unknown, excerpts = [quote], retrieved = [url]): Message {
   return { content: [
@@ -24,7 +24,7 @@ it('accepts a retrieved, cited, explicit street-wide neighborhood claim and reco
   const row = neighborhoodRow()
   const fixed = proposed(row, { neighborhood: 'הדר' })
   const result = parseLookupResponse(message({ ...report([fixed]), lookup_evidence: [proof()] }), [row])
-  expect(result.facts).toEqual([expect.objectContaining({ field: 'neighborhood', value: 'הדר', url, quote })])
+  expect(result.facts).toEqual([expect.objectContaining({ source: 'רשות המסים', field: 'neighborhood', value: 'הדר', url, quote })])
   expect(verifyRepairReport(JSON.stringify(result.report), [row], result.facts)).toEqual(report([fixed]))
   expect(isVerifiedRepair(row, fixed)).toBe(false)
 })
@@ -35,6 +35,23 @@ it('accepts an exact source-backed year only when the citation explicitly covers
   const result = parseLookupResponse(message({ ...report([fixed]), lookup_evidence: [proof('year_built', 1990, yearQuote)] }, [yearQuote]), [row])
   expect(result.facts).toHaveLength(1)
   expect(isVerifiedRepair(row, fixed, result.facts)).toBe(true)
+})
+
+it('preserves the row provider label independently of the supporting webpage and verifies the binding', () => {
+  const row = candidate({ neighborhood: '', source: '  רשות המיסים  ' })
+  const fixed = proposed(row, { neighborhood: 'הדר' })
+  const result = parseLookupResponse(message({ ...report([fixed]), lookup_evidence: [{ ...proof(), source: ' רשות המיסים ' }] }), [row])
+  expect(result.facts).toEqual([expect.objectContaining({ source: 'רשות המיסים', url })])
+  expect(verifyRepairReport(JSON.stringify(result.report), [row], result.facts)).toEqual(report([fixed]))
+  expect(fixed.source).toBe('רשות המיסים')
+  expect(isVerifiedRepair(row, fixed, result.facts.map((fact) => ({ ...fact, source: 'other provider' })))).toBe(false)
+})
+
+it.each([undefined, null, 42, ' '])('rejects missing or malformed evidence source: %j', (source) => {
+  const row = neighborhoodRow()
+  expect(() => parseLookupResponse(message({ ...report([proposed(row, { neighborhood: 'הדר' })]),
+    lookup_evidence: [{ ...proof(), source }],
+  }), [row])).toThrow()
 })
 
 it('retains unknown years as explicit missing values', () => {
@@ -71,6 +88,7 @@ it('never replaces supplied facts with unknown or hides malformed construction y
 it.each([
   { city: 'ירושלים' }, { source_url: 'https://fabricated.example' }, { source_url: 'http://city.example/streets/herzl' },
   { quote: '' }, { quote: 'invented supporting text' }, { value: 1990 },
+  { source: 'a different provider' },
 ])('rejects unsupported neighborhood evidence: %j', (changes) => {
   const row = neighborhoodRow()
   const result = parseLookupResponse(message({ ...report([proposed(row, { neighborhood: 'הדר' })]), lookup_evidence: [{ ...proof(), ...changes }] }), [row])

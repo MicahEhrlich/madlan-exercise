@@ -22,7 +22,7 @@ export default function ImportSummary() {
             <dd className="mt-2 text-2xl font-semibold tabular-nums text-sky-800 dark:text-sky-300">{formatValue(data.completed_rows)}</dd>
           </div>
         </dl>
-        <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">הסיכום מתייחס לכל הקובץ ואינו משתנה לפי החיפוש והמסננים. רשומות שתוקנו לערכים לא ידועים בלבד אינן נספרות כהשלמה.</p>
+        <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">הסיכום מתייחס לכל הקובץ ואינו משתנה לפי החיפוש והמסננים. רשומות שתוקנו גם עם ערכים לא ידועים נספרות כהשלמה.</p>
       </>}
     </section>
   )

@@ -236,6 +236,7 @@ it('attempts eligible fact lookups with full context, retains unknown years, and
       ...response(report(corrected.map((row) => proposed(row, { has_parking: false, neighborhood: 'הדר' })), failed.map((row) => row.original))),
       facts: corrected.map((row) => ({
         identity: JSON.stringify([row.original.deal_id, row.original.city, row.original.street]),
+        source: row.prepared.source.trim(),
         field: 'neighborhood' as const, value: 'הדר', url: 'https://city.example/streets',
         quote: 'בחיפה ברחוב הרצל כל הרחוב נמצא בשכונת הדר.',
       })),
@@ -287,6 +288,7 @@ it.each([true, false])('preserves first-valid identity behavior across deferred 
     ...response(success ? report(candidates.map((row) => proposed(row, { has_parking: false, year_built: 1990 })))
       : report([], candidates.map((row) => row.original))),
     facts: success ? candidates.map((row) => ({ identity: JSON.stringify([row.original.deal_id, row.original.city, row.original.street]),
+      source: row.prepared.source.trim(),
       field: 'year_built' as const, value: 1990, url: 'https://city.example', quote: 'All buildings built in 1990' })) : [],
   }))
   const log = logger()

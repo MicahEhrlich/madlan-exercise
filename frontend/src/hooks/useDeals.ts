@@ -2,12 +2,11 @@ import { useEffect, useState } from 'react'
 import { fetchDeals } from '../api/fetchDeals'
 import type { DealsPage } from '../types/dealsPage'
 import type { DealFilters } from '../utils/filterDeals'
-import { columns } from '../data/dealColumns'
 
 export function useDeals(page: number, count: number, filters: DealFilters, query: string) {
   const [attempt, setAttempt] = useState(0)
   const [processingKey, setProcessingKey] = useState('')
-  const params = new URLSearchParams(columns.flatMap(([key]) => filters[key] ? [[key, filters[key]]] : []))
+  const params = new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== ''))
   if (query.trim()) params.set('q', query.trim())
   const filterQuery = params.toString()
   const key = `${page}-${count}-${attempt}-${filterQuery}`

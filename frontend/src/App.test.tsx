@@ -5,7 +5,7 @@ import DealsTableView from './components/DealsTableView'
 import { mockDeals } from './data/mockDeals'
 
 const table = <DealsTableView deals={mockDeals} total={mockDeals.length} query="" filters={{}}
-  onQueryChange={() => {}} onFilterChange={() => {}} onReset={() => {}} />
+  onQueryChange={() => {}} onFilterChange={() => {}} onRangeApply={() => {}} onReset={() => {}} />
 
 describe('property deals table', () => {
   it('renders all 19 column headers and four complete records', () => {

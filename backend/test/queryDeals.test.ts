@@ -30,6 +30,28 @@ async function get(query: Record<string, string> = {}) {
 }
 
 describe('GET /deals', () => {
+  it.each([
+    ['size_sqm', 100], ['price_nis', 2000000], ['price_per_sqm', 20000],
+  ] as const)('applies inclusive, open-ended, empty, and combined %s ranges before pagination', async (field, value) => {
+    expect((await get({ [`${field}_min`]: String(value), [`${field}_max`]: String(value), count: '2', page: '2' })).json())
+      .toMatchObject({ total: 5, total_pages: 3, rows: [server.deals[2], server.deals[3]] })
+    expect((await get({ [`${field}_min`]: '0' })).json().total).toBe(5)
+    expect((await get({ [`${field}_max`]: String(value) })).json().total).toBe(5)
+    expect((await get({ [`${field}_min`]: String(value + 0.5) })).json().total).toBe(0)
+    expect((await get({ [`${field}_max`]: String(value - 0.5) })).json().total).toBe(0)
+    expect((await get({ [`${field}_min`]: String(value + 1), [`${field}_max`]: String(value) })).json().total).toBe(0)
+    expect((await get({ [`${field}_min`]: String(value), city: 'תל אביב', deal_date: '2024-02-29', q: 'הרצל' })).json())
+      .toMatchObject({ total: 2, rows: [server.deals[1], server.deals[4]] })
+  })
+
+  it.each(['size_sqm_min', 'size_sqm_max', 'price_nis_min', 'price_nis_max', 'price_per_sqm_min', 'price_per_sqm_max'])(
+    'rejects invalid %s range bounds', async (field) => {
+      for (const value of ['abc', '-1', 'Infinity', '']) {
+        expect((await get({ [field]: value })).statusCode).toBe(400)
+      }
+    },
+  )
+
   it('calculates totals and pages after combining free-text search and column filters', async () => {
     const first = (await get({ q: 'חיפה', rooms: '4', count: '1' })).json()
     expect(first).toMatchObject({ page: 1, total: 2, total_pages: 2, rows: [{ deal_id: 'D3' }] })

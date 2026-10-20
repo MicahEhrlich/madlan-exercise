@@ -1,5 +1,9 @@
 import type { PropertyDeal } from '../types/propertyDeal'
 
+export const numericFilterColumns: ReadonlySet<keyof PropertyDeal> = new Set([
+  'rooms', 'size_sqm', 'floor', 'total_floors', 'year_built', 'price_nis', 'price_per_sqm',
+])
+
 export const columns = [
   ['row_status', 'סטטוס רשומה'],
   ['city', 'עיר'],

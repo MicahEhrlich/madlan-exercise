@@ -6,6 +6,7 @@ import type { RepairCandidate, RepairReport } from './types.js'
 
 export interface VerifiedLookupFact {
   identity: string
+  source: string
   field: 'year_built' | 'neighborhood'
   value: number | string
   url: string
@@ -18,7 +19,7 @@ export const lookupReportSchema = z.strictObject({
   auto_corrected_rows: z.array(dealSchema),
   failed_rows: z.array(rawDealSchema),
   lookup_evidence: z.array(z.strictObject({
-    deal_id: z.string(), city: z.string(), street: z.string(),
+    deal_id: z.string(), city: z.string(), street: z.string(), source: z.string().trim().min(1),
     field: z.enum(['year_built', 'neighborhood']), value: z.union([z.string(), z.number()]),
     source_url: z.string(), quote: z.string(), scope: z.literal('entire_street'),
   })),
@@ -47,7 +48,7 @@ export function parseLookupResponse(message: Message, candidates: readonly Repai
   for (const proof of parsed.lookup_evidence) {
     const identity = dealKey(proof)
     const candidate = byIdentity.get(identity)
-    if (!candidate || candidate.prepared[proof.field].trim()) continue
+    if (!candidate || candidate.prepared[proof.field].trim() || proof.source !== candidate.prepared.source.trim()) continue
     const quote = normalized(proof.quote)
     const citation = citations.find((item) => item.url === proof.source_url && normalized(item.cited_text).includes(quote))
     if (!quote || !proof.source_url.startsWith('https://') || !retrievedUrls.has(proof.source_url) || !citation) continue
@@ -61,7 +62,7 @@ export function parseLookupResponse(message: Message, candidates: readonly Repai
       if (typeof proof.value !== 'number' || !Number.isInteger(proof.value) || proof.value <= 0 ||
         !/(?:כל הבניינים|כל המבנים|all buildings|all properties)/u.test(quote) || !new RegExp(`(?:נבנו|נבנה|built|constructed)\\s+(?:in\\s+|בשנת\\s+|ב[-־]?\\s*)?${proof.value}(?:$|[^0-9])`, 'u').test(quote)) continue
     }
-    facts.push({ identity, field: proof.field, value: proof.value, url: proof.source_url, quote: proof.quote })
+    facts.push({ identity, source: proof.source, field: proof.field, value: proof.value, url: proof.source_url, quote: proof.quote })
   }
   // Conflicting source-backed answers are unresolved, even if one was proposed first.
   const unambiguousFacts = facts.filter((fact) => !facts.some((other) => other.identity === fact.identity && other.field === fact.field && other.value !== fact.value))

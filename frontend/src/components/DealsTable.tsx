@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useDeals } from '../hooks/useDeals'
 import DealsTableView from './DealsTableView'
-import type { DealFilters } from '../utils/filterDeals'
-import type { PropertyDealValues } from '../types/propertyDeal'
+import type { DealFilters, FilterKey } from '../utils/filterDeals'
 
 export default function DealsTable() {
   const [page, setPage] = useState(1)
@@ -19,7 +18,7 @@ export default function DealsTable() {
     return () => clearTimeout(timeout)
   }, [query, appliedQuery])
   const { data, loading, processing, error, retry } = useDeals(page, count, filters, appliedQuery)
-  const changeFilter = (key: keyof PropertyDealValues, value: string) => {
+  const changeFilter = (key: FilterKey, value: string) => {
     setFilters((current) => ({ ...current, [key]: value }))
     setPage(1)
   }
@@ -35,6 +34,11 @@ export default function DealsTable() {
       {!error && data && <>
         <DealsTableView deals={data.rows} total={data.total} filters={filters} query={query}
           onQueryChange={setQuery} onFilterChange={changeFilter}
+          onRangeApply={(ranges) => {
+            setFilters((current) => ({ ...current, ...ranges }))
+            setAppliedQuery(query)
+            setPage(1)
+          }}
           onReset={() => { setFilters({}); setQuery(''); setAppliedQuery(''); setPage(1) }} />
         <nav aria-label="דפדוף בעסקאות" className="flex flex-wrap items-center gap-4">
           <button type="button" className={buttonClass} disabled={loading || page <= 1} onClick={() => setPage((value) => value - 1)}>העמוד הקודם</button>
