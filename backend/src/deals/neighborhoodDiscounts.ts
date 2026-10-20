@@ -1,11 +1,12 @@
 import type { DealCollection, SavedDeal } from './types.js'
+import { cityName } from './cityName.js'
 
 /** Benchmarks always use the full accepted dataset, before search and pagination. */
 export function neighborhoodDiscounts(deals: DealCollection): ReadonlySet<string> {
   const groups = new Map<string, Readonly<SavedDeal>[]>()
   for (const deal of deals) {
     if (!deal.neighborhood.trim() || deal.neighborhood.trim().toLowerCase() === 'unknown') continue
-    const key = JSON.stringify([deal.city, deal.neighborhood, deal.property_type])
+    const key = JSON.stringify([cityName(deal.city), deal.neighborhood, deal.property_type])
     const group = groups.get(key)
     if (group) group.push(deal)
     else groups.set(key, [deal])

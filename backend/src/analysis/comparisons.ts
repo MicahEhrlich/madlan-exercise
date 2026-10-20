@@ -1,4 +1,5 @@
 import type { DealCollection, SavedDeal } from '../deals/types.js'
+import { cityName } from '../deals/cityName.js'
 
 export type ComparisonScope = 'street' | 'neighborhood' | 'city'
 export interface ComparisonGroup {
@@ -24,7 +25,7 @@ export function valuation(percentage: number) {
 
 export function buildComparisons(target: Readonly<SavedDeal>, deals: DealCollection) {
   const city = deals.filter((row) => row.row_id !== target.row_id &&
-    row.city === target.city && row.property_type === target.property_type)
+    cityName(row.city) === cityName(target.city) && row.property_type === target.property_type)
   const groups: ComparisonGroup[] = []
   for (const scope of ['street', 'neighborhood', 'city'] as const) {
     if (scope !== 'city' && !knownLocation(target[scope])) continue

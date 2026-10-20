@@ -13,7 +13,7 @@ import type { AnalysisOptions, AnalysisTransport } from './transport.js'
 import { withinDeadline } from './deadline.js'
 
 const analysisTtlSeconds = 300
-export const analysisPolicyVersion = 'v1'
+export const analysisPolicyVersion = 'v2'
 
 export function analysisCacheKey(datasetHash: string, rowId: string, model: string) {
   return `analysis:${analysisPolicyVersion}:${datasetHash}:${JSON.stringify([rowId, model])}`

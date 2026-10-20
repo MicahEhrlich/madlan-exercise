@@ -1,5 +1,36 @@
 # React + TypeScript + Vite
 
+The four amenity filters always offer `הכול`, `כן`, and `לא`, including after a
+selection or when there are no matching rows. Boolean labels are formatted from
+their filter value rather than whichever booleans happen to be on the current
+page. Property type, condition, and source options come from `/deals.filter_options`, a
+catalog of all accepted values independent of current filters and pagination.
+Users can switch directly between values without clearing first; unknown
+conditions display as `לא ידוע`. The existing city/neighborhood/street hierarchy
+is unchanged. Catalog metadata is validated and uses the existing TanStack Query
+request; older servers retain a page-based fallback for missing catalog fields.
+
+Location dropdowns follow city → neighborhood → street. All cities stay available;
+neighborhood options are scoped only to the selected city, and streets only to
+the selected city and neighborhood. Lists come from `/deals.location_options`
+over all accepted rows, so selecting a location or narrowing the table never
+removes sibling choices. Changing or clearing a city clears neighborhood and
+street; changing or clearing a neighborhood clears street. Other filters remain
+applied, and pagination returns to page 1. Neighborhoods require a selected city;
+until then the disabled dropdown reads `יש לבחור עיר תחילה`. Street choices also
+require a city; without a neighborhood selection they cover that city's streets.
+During a parent change, outdated child options are disabled
+until the matching scope arrives; city choices remain usable for rapid switching.
+The existing TanStack Query cancellation ignores late responses. Location metadata
+is validated against the requested scope. Older API responses without the catalog
+retain the previous page-based fallback; deploy the updated backend to obtain all
+location choices. No extra frontend requests are needed.
+
+City options use canonical names from the server, grouping spelling variants and
+explicit aliases such as `ב"ש` / `באר-שבע` / `באר שבע` and the Tel Aviv variants.
+The `selected_city` metadata keeps an existing alias selection on its canonical
+option without appending a duplicate. Raw deal fields remain unchanged.
+
 A compact filtered-results badge appears below search and above the table. It
 shows the total matching count and mean price per sqm from `/deals.filtered_summary`,
 covering all matching pages. A single-city result also shows the signed percentage

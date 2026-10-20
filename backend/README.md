@@ -54,7 +54,7 @@ CORS_ORIGINS=
 
 - `BATCH_SIZE`: defaults to 1,000 when missing or blank. A supplied value must be
   a positive safe integer or startup fails.
-- `CSV_FILE_PATH`: defaults to the existing root CSV when missing or blank.
+- `CSV_FILE_PATH`: defaults to `assets/madlan_deals_sample.csv` when missing or blank.
   Relative paths resolve from `backend/`; absolute paths are supported. Quote paths
   containing spaces in `.env`.
 - `LLM_BATCH_SIZE`: defaults to 5, independently of CSV `BATCH_SIZE`. Must be a
@@ -141,9 +141,9 @@ REDIS_TEST_URL=redis://127.0.0.1:6379 pnpm exec vitest run test/redisIntegration
 ## Startup CSV loading
 
 After the HTTP server starts, it reads in the background
-`../madlan_deals_sample (3) (2) (1) (1).csv`. The location is resolved relative to
+`assets/madlan_deals_sample.csv`. The location is resolved relative to
 the loader module, so it works from any working directory in development and
-after compilation. Keep the root CSV available alongside the backend when
+after compilation. Include the backend's `assets/` folder when
 deploying. The file is never modified.
 
 Accepted deals are available internally as `app.deals`, a typed, frozen array of
@@ -167,6 +167,37 @@ the source/configuration. Closing during import prevents later publication or
 starting the Redis client, without waiting for model requests to complete.
 
 ### Querying deals
+
+`filter_options: { property_type: string[], condition: string[], source: string[] }` accompanies
+each response. These unique, Hebrew-sorted lists are computed from the full
+accepted dataset once per import, unaffected by selections, search, locations,
+presets, pagination, or empty result sets. Explicit `unknown` conditions are kept.
+The frontend uses fixed true/false choices for boolean amenities and these catalogs
+for property type, condition, and source, without additional requests or model calls.
+Cached responses require valid unique option arrays.
+
+Responses also include `location_options` with `cities`, `neighborhoods`, `streets`,
+and `scope: { city, neighborhood }` (null means no selected parent). `selected_city`
+provides the canonical selected city, or null. Cities come
+from the full accepted dataset. Neighborhood choices use only the selected city;
+street choices use only the selected city and neighborhood. Each list ignores its
+own selected value, search, presets, other filters, and pagination. With no parent
+selected, the corresponding list spans all accepted rows. Names are deduplicated
+and sorted with Hebrew collation; explicit `unknown` values remain filterable.
+Options remain available even when the table has no matching rows. This metadata
+uses the existing `/deals` and `/deal` requests, without additional endpoints or
+model calls. Cached responses validate the metadata and its requested parent scope;
+the `deals:v6` namespace bypasses older entries without complete filter catalogs.
+
+City identity normalizes whitespace, directional formatting marks, and dash/quote
+typography. Explicit aliases in `cityName.ts` group Tel Aviv forms (`ת"א`,
+`תל אביב`, `תל אביב יפו`), Beer Sheva (`ב"ש`, `באר-שבע`), and Modiin forms.
+Hyphenated city words such as `בית-שמש` normalize to spaces. The canonical city
+option matches all corresponding raw city spellings. Location catalogs, city
+filters, summaries, neighborhood benchmarks, and analysis comparisons use this
+same identity; original saved fields and source CSV files remain unchanged.
+There is no fuzzy matching, and distinct names such as `מודיעין עילית` are retained.
+Analysis cache policy version 2 prevents reuse of pre-normalization assessments.
 
 Every `/deals` and `/deal` response includes `filtered_summary` alongside the
 existing pagination fields:
@@ -195,7 +226,7 @@ implied by this descriptive counter.
 Multiple-city results have `city_comparison: null`. Empty results have both
 summary fields null. Pagination, including an empty page beyond the last page,
 does not change the summary. Search, presets, ranges, and all other filters do.
-The response remains cached as a unit with its summary; cache keys use `deals:v2`
+The response remains cached as a unit with its summary; cache keys use `deals:v6`
 so older entries without summaries are bypassed. Cache validation checks summary
 shape, finite positive means, percentage consistency, and result-count consistency.
 The global import summary endpoint is unchanged. No extra LLM calls are made.
