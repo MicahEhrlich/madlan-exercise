@@ -2,6 +2,8 @@ import type { Deal, RawDeal } from '../deals/types.js'
 import type { VerifiedLookupFact } from './lookupEvidence.js'
 
 export interface RepairCandidate {
+  /** Untranslated CSV values, retained only for repair attribution and logging. */
+  sourceOriginal?: RawDeal
   recordNumber: number
   original: RawDeal
   prepared: RawDeal

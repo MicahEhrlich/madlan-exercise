@@ -252,8 +252,9 @@ to persist batches locally.
 
 - All 19 expected columns must be present exactly once; extra columns are rejected.
   Header order may vary. UTF-8 BOM, quoted commas/newlines, and empty lines are supported.
-- Surrounding whitespace is trimmed; text and city aliases are preserved without
-  translation or inferred equivalences. Missing `condition` and `floor` default to
+- Surrounding whitespace is trimmed. City names containing English letters are
+  translated into Hebrew by the LLM before validation and duplicate detection;
+  untranslatable rows are excluded. Other text is preserved. Missing `condition` and `floor` default to
   the literal `unknown`; missing `has_parking` defaults to `false` by application
   policy. Defaults are logged with `kind: "default"`, rather than treated as observed
   property facts. Nonempty malformed floor or parking values are not defaulted.
@@ -306,11 +307,13 @@ counts are logged and skipped when the parser can safely continue.
 
 ### Sample CSV verification
 
-With LLM repair disabled, the supplied file contains **530 records: 510 accepted,
-20 rejected**, with 510 unique accepted IDs. Of the accepted rows, 381 pass original
-validation and 129 are accepted after code corrections/defaults, including explicit
-unknown lookup values. These rules recover 108 more rows than the previous 402/128 result. Live LLM results are not assumed or
-recorded as verified until responses pass the backend checks. This sample has no
+With LLM access disabled, the supplied file contains **530 records: 503 accepted,
+27 rejected**, with 503 unique accepted IDs. Of the accepted rows, 375 pass original
+validation and 128 are accepted after code corrections/defaults, including explicit
+unknown lookup values. Seven rows require city translation (four `Tel Aviv-Yafo`
+and three `Jerusalem`) and are excluded without successful model translations.
+Mocked successful translations recover these seven rows, yielding 510 accepted
+and 20 rejected; this is a test result, not a claim about live model output. This sample has no
 repeated IDs at differing cities or streets, so the address-aware duplicate policy
 does not change its totals.
 
@@ -319,6 +322,28 @@ combinations. A row can have several reasons, so reason counts should not be sum
 to obtain the number of rejected records.
 
 ## Anthropic repair
+
+### English city names
+
+Before other repairs, each distinct English city name is sent with the exact prompt
+`Translate the follwing city name X into Hebrew`, substituting the trimmed name for
+`X`. The existing `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL` settings apply. The model
+is instructed to return only the Hebrew city name, or `UNKNOWN` if translation is
+ambiguous or impossible. Responses must be complete and contain a bounded Hebrew
+name; empty, English, multiline, malformed, and recognized failure responses are rejected.
+These checks validate output shape; they cannot independently establish a model
+translation's factual accuracy.
+
+Successful and failed translations are cached by case-insensitive name for the
+duration of the import, including the lookup pass. Requests have a 10-second hard
+deadline and a separate 30-second cumulative translation budget, with no retries.
+A service failure or timeout disables further translation calls for that import.
+Rows without a successful translation are excluded, including when credentials
+are absent. Hebrew rows continue through the existing import pipeline.
+Duplicate detection uses the translated city, and city changes appear in
+`fixed_fields`, completion counts, LLM correction counts, and structured logs.
+The original CSV remains unchanged. Tests inject translations; no paid API calls
+are required for verification.
 
 Before queueing a row, the backend checks whether **every remaining error** has a
 verifiable repair path, using the same evidence checks applied to returned model
@@ -456,7 +481,7 @@ rejected rows, API request duration/token usage, and original/code/LLM acceptanc
 counts. Service failure logs include request type (`format` or `lookup`), elapsed
 time, cancellation status, and HTTP status when available, without provider
 error bodies or credentials. A sample-file regression test simulates a failed
-lookup and verifies **510 accepted / 20 rejected** with explicit unknown values;
+lookup and failed city translations and verifies **503 accepted / 27 rejected** with explicit unknown values;
 actual live counts still depend on model responses and deadlines.
 Backend tests mock the SDK and transport; no paid API calls are made during
 verification.

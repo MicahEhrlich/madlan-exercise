@@ -13,7 +13,7 @@ afterEach(async () => { await Promise.all(directories.splice(0).map((directory) 
 const logger = { info: vi.fn(), warn: vi.fn() }
 
 it('reconciles the repository CSV counts without model access', async () => {
-  expect((await loadDealsWithSummary(logger)).summary).toEqual({ total_rows: 530, parsed_rows: 510, completed_rows: 68 })
+  expect((await loadDealsWithSummary(logger)).summary).toEqual({ total_rows: 530, parsed_rows: 503, completed_rows: 68 })
 })
 
 it('reports source records, accepted rows, and known completions independently of filtering, pagination, and Redis', async () => {

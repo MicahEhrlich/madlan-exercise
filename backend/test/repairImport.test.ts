@@ -304,10 +304,11 @@ it('recovers all abbreviated month dates in code even when the lookup service fa
     throw new Error('lookup failed')
   })
   const log = logger()
-  const deals = await loadDeals(log, undefined, { anthropicApiKey: 'test', repairTransport: transport, batchSize: 17 })
-  expect(deals).toHaveLength(510)
-  expect(log.info).toHaveBeenCalledWith({ originalAccepted: 381, codeCorrected: 129, llmCorrected: 0 }, 'Deals CSV correction summary')
-  expect(log.info).toHaveBeenCalledWith({ total: 530, accepted: 510, rejected: 20 }, 'Deals CSV load complete')
+  const deals = await loadDeals(log, undefined, { anthropicApiKey: 'test', repairTransport: transport, batchSize: 17,
+    cityTranslationTransport: async () => 'UNKNOWN' })
+  expect(deals).toHaveLength(503)
+  expect(log.info).toHaveBeenCalledWith({ originalAccepted: 375, codeCorrected: 128, llmCorrected: 0 }, 'Deals CSV correction summary')
+  expect(log.info).toHaveBeenCalledWith({ total: 530, accepted: 503, rejected: 27 }, 'Deals CSV load complete')
 })
 
 it('gives deferred lookups their own budget after priority repairs', async () => {

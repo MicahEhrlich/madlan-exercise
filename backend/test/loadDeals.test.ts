@@ -176,9 +176,9 @@ describe('streamed in-memory batches', () => {
   it('preserves the real dataset results when boundaries split valid and rejected rows', async () => {
     const log = logger()
     const deals = await loadDeals(log, undefined, { batchSize: 17 })
-    expect(deals).toHaveLength(510)
-    expect(log.warn).toHaveBeenCalledTimes(20)
-    expect(log.info).toHaveBeenCalledWith({ total: 530, accepted: 510, rejected: 20 }, 'Deals CSV load complete')
+    expect(deals).toHaveLength(503)
+    expect(log.warn).toHaveBeenCalledTimes(27)
+    expect(log.info).toHaveBeenCalledWith({ total: 530, accepted: 503, rejected: 27 }, 'Deals CSV load complete')
   })
 })
 
@@ -224,8 +224,8 @@ it('still rejects repeated ID/address combinations after trimming and validates 
 
 it('uses an unambiguous composite identity even when address values contain separators', async () => {
   const path = await file(csv([
-    { city: 'a|b', street: 'c' },
-    { city: 'a', street: 'b|c' },
+    { city: 'א|ב', street: 'ג' },
+    { city: 'א', street: 'ב|ג' },
   ]))
   expect(await loadDeals(logger(), path)).toHaveLength(2)
 })

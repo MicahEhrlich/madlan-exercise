@@ -10,11 +10,13 @@ import type { RepairOptions } from '../repairs/repairSession.js'
 import { dateRepairEvidence } from '../repairs/dateEvidence.js'
 import { needsLookup } from '../repairs/lookupEvidence.js'
 import { canAttemptRepair } from '../repairs/repairEvidence.js'
+import { createCityTranslator } from '../repairs/cityTranslation.js'
+import type { CityTranslationOptions } from '../repairs/cityTranslation.js'
 
 export const defaultCsvPath = new URL('../../../madlan_deals_sample (3) (2) (1) (1).csv', import.meta.url)
 
 type LoadLogger = Pick<FastifyBaseLogger, 'warn' | 'info'>
-export interface LoadDealsOptions extends RepairOptions {
+export interface LoadDealsOptions extends RepairOptions, CityTranslationOptions {
   batchSize?: number
 }
 
@@ -35,6 +37,7 @@ export async function loadDealsWithSummary(logger: LoadLogger, csvPath: string |
   let originalAccepted = 0
   let codeCorrected = 0
   let llmCorrected = 0
+  const translateCity = createCityTranslator(logger, options)
   const reject = (recordNumber: number, rawFields: readonly string[], reasons: string[]) => {
     rejected++
     logger.warn({ recordNumber, rawFields, reasons }, 'Rejected CSV deal')
@@ -47,18 +50,22 @@ export async function loadDealsWithSummary(logger: LoadLogger, csvPath: string |
     seenIds.add(deal.deal_id)
     seenDeals.add(dealKey(deal))
     const fixed_fields = fixedFields(original, deal)
+    if (fixed_fields.includes('city')) {
+      logger.info({ recordNumber, original: original.city, corrected: deal.city }, 'CSV city translated by LLM')
+    }
     const row_status = fixed_fields.length ? 'fixed' : 'original'
     entries.push({ recordNumber, deal: Object.freeze({ ...deal, row_status, fixed_fields }) })
     return idCollision
   }
   const repairs = createRepairSession(logger, options, (candidate, deal) => {
     // Pending identities are resolved before processing the same ID and address again.
-    save(candidate.recordNumber, deal, candidate.original)
+    save(candidate.recordNumber, deal, candidate.sourceOriginal ?? candidate.original)
     llmCorrected++
-    logger.info({ recordNumber: candidate.recordNumber, original: candidate.original, corrected: deal, dateDayDefaulted: dateRepairEvidence(candidate.original.deal_date)?.dayDefaulted ?? false }, 'CSV deal corrected by LLM')
+    logger.info({ recordNumber: candidate.recordNumber, original: candidate.sourceOriginal ?? candidate.original, corrected: deal, dateDayDefaulted: dateRepairEvidence(candidate.original.deal_date)?.dayDefaulted ?? false }, 'CSV deal corrected by LLM')
   }, (candidate, reason) => reject(candidate.recordNumber, candidate.rawFields, [...candidate.reasons, reason]), (candidate, deal, reason) => {
-    save(candidate.recordNumber, deal, candidate.original)
-    codeCorrected++
+    save(candidate.recordNumber, deal, candidate.sourceOriginal ?? candidate.original)
+    if (candidate.sourceOriginal) llmCorrected++
+    else codeCorrected++
     logger.info({ recordNumber: candidate.recordNumber, year_built: deal.year_built, neighborhood: deal.neighborhood, reason }, 'CSV deal retained with unknown lookup values')
   })
 
@@ -75,7 +82,14 @@ export async function loadDealsWithSummary(logger: LoadLogger, csvPath: string |
           continue
         }
 
-        const raw = Object.fromEntries(headers.map((key, column) => [key, rawFields[column]])) as RawDeal
+        const sourceOriginal = Object.fromEntries(headers.map((key, column) => [key, rawFields[column]])) as RawDeal
+        const city = await translateCity(sourceOriginal.city)
+        if (city === undefined) {
+          if (pass === 0) reject(recordNumber, rawFields, ['city: could not translate city name into Hebrew'])
+          continue
+        }
+        const translated = /[a-z]/i.test(sourceOriginal.city)
+        const raw = translated ? { ...sourceOriginal, city } : sourceOriginal
         const key = dealKey(raw)
         if (pass === 1 && !deferredLookupKeys.has(key)) continue
         if (pass === 0 && deferredLookupKeys.has(key)) continue
@@ -97,11 +111,13 @@ export async function loadDealsWithSummary(logger: LoadLogger, csvPath: string |
           logger.info({ recordNumber, ...correction }, 'CSV field corrected by code')
         }
         if ('deal' in prepared.result) {
-          const idCollision = save(recordNumber, prepared.result.deal, raw)
-          if (prepared.corrected || idCollision) codeCorrected++
+          const idCollision = save(recordNumber, prepared.result.deal, sourceOriginal)
+          if (translated) llmCorrected++
+          else if (prepared.corrected || idCollision) codeCorrected++
           else originalAccepted++
         } else {
-          await repairs.enqueue({ recordNumber, original: raw, prepared: prepared.raw, rawFields, reasons })
+          await repairs.enqueue({ recordNumber, original: raw, prepared: prepared.raw, rawFields, reasons,
+            ...(translated ? { sourceOriginal } : {}) })
         }
       }
 

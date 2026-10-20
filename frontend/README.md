@@ -11,8 +11,11 @@ the existing explicit retry flow stays predictable. HTTP 202 polling and its
 resettable inactivity deadline remain in the API layer under Query cancellation.
 
 The import summary above the table loads `/deals/summary` on mount and
-shows accepted rows out of all CSV records and rows with known values completed
-by the system. Counts cover the entire file and do not change with table filters,
+shows accepted rows out of all CSV records, rows with known values completed
+by the system, and excluded rows (total minus accepted). Accepted and excluded
+percentages use all CSV records as their denominator; the completion percentage
+uses accepted rows. Percentages display up to one decimal place, or `—` when
+the denominator is zero. Counts cover the entire file and do not change with table filters,
 search, or pagination. Unknown-only repairs are excluded from completions. Summary
 loading, errors, and retry are independent of table requests; a summary failure
 does not block the table or substitute estimated counts.

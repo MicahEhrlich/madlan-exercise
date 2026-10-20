@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { renderWithQuery as render } from '../../test/renderWithQuery'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import ImportSummary from './ImportSummary'
@@ -25,14 +25,19 @@ it('keeps the summary in processing state during a long import and polls until i
   expect(screen.getByText('1,510 מתוך 1,530')).toBeDefined()
 })
 
-it('shows global parsed and completed counts and fetches only once across rerenders', async () => {
+it('shows global parsed, completed, and excluded counts and percentages and fetches only once across rerenders', async () => {
   fetchMock.mockResolvedValue(ok())
   const view = render(<ImportSummary />)
   expect(screen.getByRole('status').textContent).toContain('טוען סיכום')
   await screen.findByText('1,510 מתוך 1,530')
   expect(screen.getByText('100', { selector: 'dd' })).toBeDefined()
   expect(screen.getByText('רשומות שבהן הושלמו נתונים על ידי המערכת')).toBeDefined()
-  expect(screen.getByText(/רשומות שתוקנו גם עם ערכים לא ידועים נספרות כהשלמה/)).toBeDefined()
+  expect(screen.getByText('98.7%')).toBeDefined()
+  expect(screen.getByText('6.6%').parentElement!.textContent).toContain('מהרשומות שנקלטו בהצלחה')
+  const excluded = screen.getByText('רשומות שהוחרגו מהקליטה').parentElement!
+  expect(within(excluded).getByText('20')).toBeDefined()
+  expect(within(excluded).getByText('1.3%').parentElement!.textContent).toContain('מכלל רשומות הקובץ')
+  expect(screen.getByText(/ערכים לא ידועים אינן נספרות כהשלמה/)).toBeDefined()
   expect(fetchMock).toHaveBeenCalledWith('/deals/summary', { signal: expect.any(AbortSignal) })
   view.rerender(<ImportSummary />)
   expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -42,7 +47,21 @@ it('displays zero counts without inferring missing values', async () => {
   fetchMock.mockResolvedValue(new Response(JSON.stringify({ total_rows: 0, parsed_rows: 0, completed_rows: 0 })))
   render(<ImportSummary />)
   await screen.findByText('0 מתוך 0')
-  expect(screen.getByText('0')).toBeDefined()
+  expect(screen.getAllByText('0', { selector: 'dd' })).toHaveLength(2)
+  expect(screen.getAllByText('—', { selector: 'bdi' })).toHaveLength(3)
+})
+
+it.each([
+  { total_rows: 10, parsed_rows: 10, completed_rows: 0, percentages: ['100%', '0%', '0%'], excluded: '0' },
+  { total_rows: 10, parsed_rows: 0, completed_rows: 0, percentages: ['0%', '—', '100%'], excluded: '10' },
+  { total_rows: 10, parsed_rows: 10, completed_rows: 10, percentages: ['100%', '100%', '0%'], excluded: '0' },
+])('handles all-accepted, all-excluded, and all-completed imports: %j', async ({ percentages, excluded, ...counts }) => {
+  fetchMock.mockResolvedValue(new Response(JSON.stringify(counts)))
+  render(<ImportSummary />)
+  await screen.findByText(`${counts.parsed_rows} מתוך ${counts.total_rows}`)
+  const section = screen.getByRole('region', { name: 'סיכום קליטת הנתונים' })
+  expect([...section.querySelectorAll('dd bdi')].map((element) => element.textContent)).toEqual(percentages)
+  expect(within(screen.getByText('רשומות שהוחרגו מהקליטה').parentElement!).getByText(excluded, { selector: 'dd' })).toBeDefined()
 })
 
 it.each(['http', 'network', 'json', 'invalid'] as const)('shows an independent error and retries after %s failure', async (failure) => {
@@ -95,6 +114,9 @@ it('keeps import counts unchanged when table filters and pages change', async ()
   await screen.findByText('עמוד 2 מתוך 2 · 21 עסקאות')
   expect(screen.getByText('1,510 מתוך 1,530')).toBeDefined()
   expect(screen.getByText('100', { selector: 'dd' })).toBeDefined()
+  expect(screen.getByText('98.7%')).toBeDefined()
+  expect(screen.getByText('6.6%')).toBeDefined()
+  expect(screen.getByText('1.3%')).toBeDefined()
   expect(fetchMock.mock.calls.filter(([input]) => input === '/deals/summary')).toHaveLength(1)
   await waitFor(() => expect(screen.queryByText('טוען עסקאות…')).toBeNull())
 })
