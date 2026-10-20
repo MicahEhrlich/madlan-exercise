@@ -1,6 +1,8 @@
 import { buildApp } from './app.js'
+import { loadBackendConfig } from './config.js'
 
-const app = buildApp({ logger: true })
+const config = loadBackendConfig()
+const app = buildApp({ logger: true }, config)
 
 try {
   await app.listen({
